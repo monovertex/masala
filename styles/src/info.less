@@ -1,0 +1,54 @@
+
+@info-height: 70px;
+
+.info-container {
+    position: absolute;
+    bottom: 0;
+    left: 20px;
+    right: 20px;
+    height: @info-height;
+    line-height: @info-height;
+    background-color: @color-black;
+    color: @color-white;
+
+    .info, .logo, .contact {
+        float: left;
+        height: inherit;
+        line-height: inherit;
+    }
+
+    .info {
+        width: 40%;
+        text-align: left;
+
+        h1 {
+            display: inline;
+            font-size: 13pt;
+        }
+    }
+
+    .logo {
+        @logo-padding: 3px;
+        @logo-size: (@info-height - @logo-padding * 2);
+
+        width: 20%;
+        height: @logo-size;
+        padding: @logo-padding 0;
+        text-align: center;
+
+        img {
+            width: @logo-size;
+            height: @logo-size;
+            vertical-align: top;
+        }
+    }
+
+    .contact {
+        width: 40%;
+        text-align: right;
+
+        a {
+            margin: 0 8px;
+        }
+    }
+}

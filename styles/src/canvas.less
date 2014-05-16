@@ -1,0 +1,42 @@
+
+.canvas-container,
+.placeholder {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: @info-height;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+}
+
+.canvas-container {
+    z-index: 2;
+
+    .canvas {
+        float: left;
+        height: 100%;
+        border: 0px solid #fff;
+        display: block;
+
+        .box-sizing(border-box);
+    }
+
+    #canvas-left {
+        width: 70%;
+        border-right: 2px solid @color-black;
+    }
+
+    #canvas-right {
+        width: 30%;
+    }
+}
+
+.placeholder {
+    z-index: 1;
+    background-color: darken(@color-black, 5%);
+    background-image: url(@image-logo);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}

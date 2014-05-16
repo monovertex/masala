@@ -1,0 +1,11 @@
+
+.font-smooth (@stroke: 0px; @smoothing: subpixel-antialiased) {
+    -webkit-font-smoothing: @smoothing;
+    -webkit-text-stroke: @stroke;
+}
+
+.text-overflow-ellipsis () {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}

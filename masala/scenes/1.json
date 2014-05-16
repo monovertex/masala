@@ -1,0 +1,166 @@
+{
+    "backgroundColor": { "r": 0.05, "g": 0.05, "b": 0.05 },
+    "ambientLight": { "r": 0.1, "g": 0.1, "b": 0.1 },
+    "programs": [
+        {
+            "default": true,
+            "name": "shading",
+            "shaders": {
+                "vertex": "SHADER.VERTEX.SHADING",
+                "fragment": "SHADER.FRAGMENT.SHADING"
+            }
+        },
+        {
+            "name": "basic",
+            "shaders": {
+                "vertex": "SHADER.VERTEX.BASIC",
+                "fragment": "SHADER.FRAGMENT.BASIC"
+            }
+        }
+    ],
+    "meshes": [
+        {
+            "name": "dragon",
+            "source": "/models/dragon.obj"
+        },
+        {
+            "name": "sphere",
+            "source": "/models/sphere.obj"
+        },
+        {
+            "name": "cube",
+            "source": "/models/cube.obj"
+        }
+    ],
+    "materials": [
+        {
+            "name": "red",
+            "shininess": 80,
+            "emissive": { "r": 0.10, "b": 0.03, "g": 0.01 },
+            "ambient": { "r": 0.16, "b": 0.16, "g": 0.16 },
+            "diffuse": { "r": 0.38, "b": 0.3, "g": 0.24 },
+            "specular": { "r": 1, "b": 0.9, "g": 0.9 }
+        },
+        {
+            "name": "blue",
+            "shininess": 0,
+            "emissive": { "b": 0.10, "g": 0.03, "r": 0.01 },
+            "ambient": { "b": 0.16, "g": 0.16, "r": 0.16 },
+            "diffuse": { "b": 0.38, "g": 0.3, "r": 0.24 },
+            "specular": { "b": 1, "g": 0.9, "r": 0.9 }
+        },
+        {
+            "name": "green",
+            "shininess": 10,
+            "emissive": { "g": 0.10, "r": 0.03, "b": 0.01 },
+            "ambient": { "g": 0.16, "r": 0.16, "b": 0.16 },
+            "diffuse": { "g": 0.38, "r": 0.3, "b": 0.24 },
+            "specular": { "g": 1, "r": 0.9, "b": 0.9 }
+        },
+        {
+            "name": "white",
+            "shininess": 100,
+            "emissive": { "r": 0.87, "g": 0.87, "b": 0.87 },
+            "ambient": { "r": 0, "g": 0, "b": 0 },
+            "diffuse": { "r": 0, "g": 0, "b": 0 },
+            "specular": { "r": 0, "g": 0, "b": 0 }
+        }
+    ],
+    "tree": [
+        {
+            "position": { "x": -5, "y": 5, "z": 5 },
+            "scale": { "x": 0.2, "y": 0.2, "z": 0.2 },
+            "light": {
+                "type": "point",
+                "color": { "r": 0.75, "g": 0.75, "b": 0.75 },
+                "radius": 10
+            },
+            "mesh": "sphere",
+            "material": "white"
+        },
+        {
+            "position": { "x": -5, "y": -5, "z": -5 },
+            "scale": { "x": 0.15, "y": 0.15, "z": 0.15 },
+            "light": {
+                "type": "point",
+                "color": { "r": 0.85, "g": 0.35, "b": 0.85 },
+                "radius": 3
+            },
+            "mesh": "sphere",
+            "material": "white"
+        },
+        {
+            "children": [
+                {
+                    "mesh": "dragon",
+                    "material": "red",
+                    "position": { "y": 3, "z": 3 }
+                },
+                { "mesh": "sphere", "material": "blue" },
+                {
+                    "mesh": "sphere",
+                    "material": "green",
+                    "position": { "y": -3, "z": -3 }
+                },
+                {
+                    "scale": { "x": 0.4, "y": 0.4, "z": 0.6 },
+                    "mesh": "cube",
+                    "material": "red",
+                    "position": { "x": -2, "y": 2, "z": -4 }
+                },
+                {
+                    "scale": { "x": 0.2, "y": 0.2, "z": 0.2 },
+                    "mesh": "cube",
+                    "material": "green",
+                    "position": { "x": 2, "z": 4 }
+                }
+            ]
+        },
+        {
+            "name": "secondaryCamera",
+            "position": { "x": 0, "y": 0, "z": -15 },
+            "camera": {
+                "fov": 60,
+                "forward": { "x": 0, "y": 0, "z": 1 },
+                "controls": {
+                    "forward": "i",
+                    "backward": "k",
+                    "right": "l",
+                    "left": "j",
+                    "up": "o",
+                    "down": "u"
+                }
+            }
+        },
+        {
+            "mesh": "sphere",
+            "material": "red",
+            "scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
+            "position": { "x": -20 },
+            "camera": {
+                "default": true,
+                "fov": 40,
+                "forward": { "x": 1, "y": 0, "z": 0 },
+                "controls": {
+                    "forward": "w",
+                    "backward": "s",
+                    "right": "d",
+                    "left": "a",
+                    "up": "e",
+                    "down": "q"
+                },
+                "speed": {
+                    "min": 0.5,
+                    "max": 7
+                },
+                "acceleration": 2
+            },
+            "children": [{
+                "mesh": "sphere",
+                "material": "red",
+                "position": { "x": -4, "y": 4 },
+                "scale": { "x": 0.5, "y": 0.5, "z": 0.5 }
+            }]
+        }
+    ]
+}
