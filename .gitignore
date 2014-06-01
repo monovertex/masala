@@ -40,3 +40,6 @@ Thumbs.db
 # Sublime Configuration files #
 ###############################
 sftp-config*.json
+
+
+node_modules

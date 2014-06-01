@@ -1,0 +1,132 @@
+/**
+ * Import other LESS files to allow for easier importing of the generated CSS.
+ */
+/** Libraries **/
+/** Helper LESS files **/
+/**
+ * Application-global colors palette.
+ */
+/**
+ * Declare mixins to allow for easy font change.
+ */
+/** Actual styles **/
+html,
+body,
+.global-wrapper {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+.clearfix {
+  *zoom: 1;
+}
+.clearfix:before,
+.clearfix:after {
+  content: " ";
+  display: table;
+}
+.clearfix:after {
+  clear: both;
+}
+body {
+  background-color: #333333;
+  font-family: 'Ubuntu', sans-serif;
+}
+a {
+  color: #c18b75;
+  text-decoration: none;
+  -webkit-transition-property: color;
+  -moz-transition-property: color;
+  -o-transition-property: color;
+  transition-property: color;
+  -webkit-transition-duration: 0.3s;
+  -moz-transition-duration: 0.3s;
+  -o-transition-duration: 0.3s;
+  transition-duration: 0.3s;
+}
+a:hover {
+  color: #d7d1c3;
+}
+.global-wrapper {
+  position: relative;
+}
+.info-container {
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
+  height: 70px;
+  line-height: 70px;
+  background-color: #333333;
+  color: #d7d1c3;
+}
+.info-container .info,
+.info-container .logo,
+.info-container .contact {
+  float: left;
+  height: inherit;
+  line-height: inherit;
+}
+.info-container .info {
+  width: 40%;
+  text-align: left;
+}
+.info-container .info h1 {
+  display: inline;
+  font-size: 13pt;
+}
+.info-container .logo {
+  width: 20%;
+  height: 64px;
+  padding: 3px 0;
+  text-align: center;
+}
+.info-container .logo img {
+  width: 64px;
+  height: 64px;
+  vertical-align: top;
+}
+.info-container .contact {
+  width: 40%;
+  text-align: right;
+}
+.info-container .contact a {
+  margin: 0 8px;
+}
+.canvas-container,
+.placeholder {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 70px;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.canvas-container {
+  z-index: 2;
+}
+.canvas-container .canvas {
+  float: left;
+  height: 100%;
+  border: 0px solid #fff;
+  display: block;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+.canvas-container #canvas-left {
+  width: 70%;
+  border-right: 2px solid #333333;
+}
+.canvas-container #canvas-right {
+  width: 30%;
+}
+.placeholder {
+  z-index: 1;
+  background-color: #262626;
+  background-image: url("../../images/logo.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}

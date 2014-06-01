@@ -22,9 +22,11 @@
 
     <!-- #### CSS #### -->
 
-        <link href='http://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700|Ubuntu:300,400,500,700' rel='stylesheet' type='text/css'>
+        <link href="http://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700|Ubuntu:300,400,500,700" rel="stylesheet" type="text/css" />
 
-        <link rel="stylesheet" href="styles/bin/app.css" />
+        <link rel="stylesheet" href="/styles/lib/normalize.css" type='text/css' />
+
+        <link rel="stylesheet" href="/styles/build/app.css" type='text/css' />
 
     <!-- #### /CSS #### -->
 
@@ -74,9 +76,16 @@
 
     <div class="placeholder"></div>
 
-    <!-- #### Masala #### -->
-        <script data-main="masala/app.js" src="masala/lib/require.js"></script>
-    <!-- #### Masala #### -->
+    <!-- #### JavaScript #### -->
+        <script src="/masala/lib/lodash.js"></script>
+        <script src="/masala/lib/gl-matrix.js"></script>
+        <script src="/masala/lib/keypress.js"></script>
+        <script src="/masala/lib/webgl-debug.js"></script>
+
+        <script src="/masala/build/masala.js"></script>
+
+        <script src="/scripts/main.js"></script>
+    <!-- #### JavaScript #### -->
 </body>
 
 </html>
