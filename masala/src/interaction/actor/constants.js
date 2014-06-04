@@ -14,6 +14,20 @@ define([], function () {
             'pitch': 'z',
             'roll': 'x'
         },
+        MOUSE_FACTOR: -0.0005,
+        DEFAULTS: {
+            MOVEMENT: {
+                MINIMUM_SPEED: 0.5,
+                MAXIMUM_SPEED: 10,
+                ACCELERATION: 3,
+                DECCELERATION: 5
+            },
+            ROTATION: {
+                SPEED: 0.35,
+                SENSITIVITY: 1,
+                ORDER: ['x', 'z', 'y']
+            }
+        },
         CONTROLS: {
             'forward': { axis: 'x', direction: MOVE_POSITIVE },
             'backward': { axis: 'x', direction: MOVE_NEGATIVE },

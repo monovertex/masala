@@ -43,6 +43,22 @@ define([
             }
         },
 
+        setDefaultValues: function (configuration, target) {
+            if (!_.isUndefined(configuration)) {
+                if (_.isPlainObject(configuration)) {
+                    _.each(configuration, function (configValue, axis) {
+                        if (_.isNumber(configValue)) {
+                            target[axis] = configValue;
+                        }
+                    });
+                } else if (_.isNumber(configuration)) {
+                    _.each(target, function (targetValue, axis) {
+                        target[axis] = configuration;
+                    });
+                }
+            }
+        },
+
         setControls: function (controls) {
             var mouse = false;
             this.rotationMouseControl.x = constants.ROTATIONS.NONE;

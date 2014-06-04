@@ -6,6 +6,8 @@ define([
     return {
 
         initializeMovement: function (options) {
+            var defaults = constants.DEFAULTS.MOVEMENT;
+
             this.movementSpeed = { x: 0, y: 0, z: 0 };
             this.movementControlToggle = {
                 x: constants.NO_MOVEMENT,
@@ -19,19 +21,37 @@ define([
             };
             this.accelerationToggle =  { x: false, y: false, z: false };
 
-            if (_.isUndefined(options.speed)) {
-                this.minimumSpeed = 0;
-                this.maximumSpeed = 10;
-            } else {
-                this.minimumSpeed = _.isNumber(options.speed.min) ?
-                    options.speed.min : 0;
-                this.maximumSpeed = _.isNumber(options.speed.max) ?
-                    options.speed.max : _.isNumber(options.speed) ?
-                    options.speed : 10;
+            this.minimumSpeed = {
+                x: defaults.MINIMUM_SPEED,
+                y: defaults.MINIMUM_SPEED,
+                z: defaults.MINIMUM_SPEED
+            };
+
+            this.maximumSpeed = {
+                x: defaults.MAXIMUM_SPEED,
+                y: defaults.MAXIMUM_SPEED,
+                z: defaults.MAXIMUM_SPEED
+            };
+
+            this.acceleration = {
+                x: defaults.ACCELERATION,
+                y: defaults.ACCELERATION,
+                z: defaults.ACCELERATION
+            };
+
+            this.deceleration = {
+                x: defaults.ACCELERATION,
+                y: defaults.ACCELERATION,
+                z: defaults.ACCELERATION
+            };
+
+            if (!_.isUndefined(options.speed)) {
+                this.setDefaultValues(options.speed.min, this.minimumSpeed);
+                this.setDefaultValues(options.speed.max, this.maximumSpeed);
             }
 
-            this.acceleration = _.isNumber(options.acceleration) ?
-                options.acceleration : 3;
+            this.setDefaultValues(options.acceleration, this.acceleration);
+            this.setDefaultValues(options.deceleration, this.deceleration);
 
             // Directional vectors.
             if (this.checkVector(options.forward)) {
@@ -65,36 +85,41 @@ define([
 
                 if (this.movementToggle[axis] !== constants.NO_MOVEMENT) {
                     if (this.accelerationToggle[axis]) {
-                        if (this.movementSpeed[axis] < this.minimumSpeed) {
-                            this.movementSpeed[axis] = this.minimumSpeed;
+                        if (this.movementSpeed[axis] <
+                                this.minimumSpeed[axis]) {
+                            this.movementSpeed[axis] = this.minimumSpeed[axis];
                         }
 
-                        if (this.movementSpeed[axis] < this.maximumSpeed) {
+                        if (this.movementSpeed[axis] <
+                                this.maximumSpeed[axis]) {
                             this.movementSpeed[axis] += (interval *
-                                this.acceleration);
+                                this.acceleration[axis]);
                         }
 
-                        if (this.movementSpeed[axis] > this.maximumSpeed) {
-                            this.movementSpeed[axis] = this.maximumSpeed;
+                        if (this.movementSpeed[axis] >
+                                this.maximumSpeed[axis]) {
+                            this.movementSpeed[axis] = this.maximumSpeed[axis];
                         }
                     } else {
-                        if (this.movementSpeed[axis] > this.minimumSpeed) {
+                        if (this.movementSpeed[axis] >
+                                this.minimumSpeed[axis]) {
                             this.movementSpeed[axis] -= (interval *
-                                this.acceleration);
+                                this.deceleration[axis]);
 
                             if (this.movementControlToggle[axis] !==
                                     constants.NO_MOVEMENT) {
                                 this.movementSpeed[axis] -= (interval *
-                                    this.acceleration);
+                                    this.acceleration[axis]);
                             }
                         }
 
-                        if (this.movementSpeed[axis] < this.minimumSpeed) {
+                        if (this.movementSpeed[axis] <
+                                this.minimumSpeed[axis]) {
                             this.movementSpeed[axis] = 0;
                         }
                     }
 
-                    if (this.movementSpeed[axis] > this.minimumSpeed) {
+                    if (this.movementSpeed[axis] > this.minimumSpeed[axis]) {
                         distance = interval * this.movementSpeed[axis] *
                             this.movementToggle[axis];
 

@@ -6,6 +6,8 @@ define([
     return {
 
         initializeRotation: function (options) {
+            var defaults = constants.DEFAULTS.ROTATION;
+
             // Rotation variables.
             this.rotationToggle = {
                 x: constants.NO_MOVEMENT,
@@ -23,20 +25,62 @@ define([
             this.gimbals = (_.isBoolean(options.gimbals) ?
                 options.gimbals : true);
 
+            this.rotationSensitivity = {
+                x: defaults.SENSITIVITY,
+                y: defaults.SENSITIVITY,
+                z: defaults.SENSITIVITY
+            };
+
+            this.rotationSpeed = {
+                x: defaults.SPEED,
+                y: defaults.SPEED,
+                z: defaults.SPEED
+            };
+
+            if (!_.isUndefined(options.controls) &&
+                    !_.isUndefined(options.controls.mouse)) {
+                this.setDefaultValues(options.controls.mouse.sensitivity,
+                    this.rotationSensitivity);
+            }
+
+            this.setDefaultValues(options.rotationSpeed, this.rotationSpeed);
+
+            if (_.isUndefined(options.gimbals)) {
+                this.rotationWithGimbals = true;
+
+                if (_.isArray(options.gimbals) &&
+                        options.gimbals.length === 3) {
+                    this.rotationAxes = options.gimbals;
+                } else {
+                    this.rotationAxes = defaults.ORDER;
+                }
+            } else {
+                this.rotationWithGimbals = false;
+
+                if (_.isArray(options.rotationOrder) &&
+                        options.rotationOrder.length === 3) {
+                    this.rotationAxes = options.rotationOrder;
+                } else {
+                    this.rotationAxes = defaults.ORDER;
+                }
+            }
+
             _.bindAll(this, 'cursorMove');
         },
 
         cursorMove: function (cursor, eventName, data) {
             var angles = {};
 
-            angles[this.rotationMouseControl.x] = -0.001 * data.x;
-            angles[this.rotationMouseControl.y] = -0.001 * data.y;
+            angles[this.rotationMouseControl.x] = this.rotationSensitivity.x *
+                constants.MOUSE_FACTOR * data.x;
+            angles[this.rotationMouseControl.y] = this.rotationSensitivity.y *
+                constants.MOUSE_FACTOR * data.y;
 
-            this.rotate(['x', 'z', 'y'], angles, true);
+            this.rotate(angles, true);
         },
 
         updateRotation: function (interval) {
-            this.rotate(['x', 'z', 'y'], interval);
+            this.rotate(interval);
         },
 
         getAngleIncrease: function (axis, angleData, exact) {
@@ -47,11 +91,35 @@ define([
                     return angleData || 0;
                 }
             } else {
-                return 0.2 * angleData * this.rotationToggle[axis];
+                return this.rotationSpeed[axis] * angleData *
+                    this.rotationToggle[axis];
             }
         },
 
-        rotate: function (axes, angleData, exact) {
+        rotate: function (angleData, exact) {
+            if (this.rotationWithGimbals) {
+                this.rotateGimbals(this.rotationAxes, angleData, exact);
+            } else {
+                this.rotateDirect(this.rotationAxes, angleData, exact);
+            }
+        },
+
+        rotateDirect: function (order, angleData, exact) {
+
+            _.each(order, function (axis) {
+                var angleIncrease = this.getAngleIncrease(axis, angleData,
+                        exact);
+
+                switch (axis) {
+                    case 'x': this.rotateX(angleIncrease); break;
+                    case 'y': this.rotateY(angleIncrease); break;
+                    case 'z': this.rotateZ(angleIncrease); break;
+                }
+            }, this);
+
+        },
+
+        rotateGimbals: function (axes, angleData, exact) {
 
             var axis = _.first(axes),
                 angle = this.rotationAngle[axis],
@@ -64,7 +132,7 @@ define([
                     case 'z': this.rotateZ(-angle); break;
                 }
 
-                this.rotate(_.rest(axes), angleData, exact);
+                this.rotateGimbals(_.rest(axes), angleData, exact);
             }
 
             if (angleIncrease !== 0) {

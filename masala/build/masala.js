@@ -595,6 +595,20 @@ modules['interaction/actor/constants'] = (function () {
             'pitch': 'z',
             'roll': 'x'
         },
+        MOUSE_FACTOR: -0.0005,
+        DEFAULTS: {
+            MOVEMENT: {
+                MINIMUM_SPEED: 0.5,
+                MAXIMUM_SPEED: 10,
+                ACCELERATION: 3,
+                DECCELERATION: 5
+            },
+            ROTATION: {
+                SPEED: 0.35,
+                SENSITIVITY: 1,
+                ORDER: ['x', 'z', 'y']
+            }
+        },
         CONTROLS: {
             'forward': { axis: 'x', direction: MOVE_POSITIVE },
             'backward': { axis: 'x', direction: MOVE_NEGATIVE },
@@ -642,6 +656,8 @@ modules['interaction/actor/movement'] = (function (constants) {
     return {
 
         initializeMovement: function (options) {
+            var defaults = constants.DEFAULTS.MOVEMENT;
+
             this.movementSpeed = { x: 0, y: 0, z: 0 };
             this.movementControlToggle = {
                 x: constants.NO_MOVEMENT,
@@ -655,19 +671,37 @@ modules['interaction/actor/movement'] = (function (constants) {
             };
             this.accelerationToggle =  { x: false, y: false, z: false };
 
-            if (_.isUndefined(options.speed)) {
-                this.minimumSpeed = 0;
-                this.maximumSpeed = 10;
-            } else {
-                this.minimumSpeed = _.isNumber(options.speed.min) ?
-                    options.speed.min : 0;
-                this.maximumSpeed = _.isNumber(options.speed.max) ?
-                    options.speed.max : _.isNumber(options.speed) ?
-                    options.speed : 10;
+            this.minimumSpeed = {
+                x: defaults.MINIMUM_SPEED,
+                y: defaults.MINIMUM_SPEED,
+                z: defaults.MINIMUM_SPEED
+            };
+
+            this.maximumSpeed = {
+                x: defaults.MAXIMUM_SPEED,
+                y: defaults.MAXIMUM_SPEED,
+                z: defaults.MAXIMUM_SPEED
+            };
+
+            this.acceleration = {
+                x: defaults.ACCELERATION,
+                y: defaults.ACCELERATION,
+                z: defaults.ACCELERATION
+            };
+
+            this.deceleration = {
+                x: defaults.ACCELERATION,
+                y: defaults.ACCELERATION,
+                z: defaults.ACCELERATION
+            };
+
+            if (!_.isUndefined(options.speed)) {
+                this.setDefaultValues(options.speed.min, this.minimumSpeed);
+                this.setDefaultValues(options.speed.max, this.maximumSpeed);
             }
 
-            this.acceleration = _.isNumber(options.acceleration) ?
-                options.acceleration : 3;
+            this.setDefaultValues(options.acceleration, this.acceleration);
+            this.setDefaultValues(options.deceleration, this.deceleration);
 
             // Directional vectors.
             if (this.checkVector(options.forward)) {
@@ -701,36 +735,41 @@ modules['interaction/actor/movement'] = (function (constants) {
 
                 if (this.movementToggle[axis] !== constants.NO_MOVEMENT) {
                     if (this.accelerationToggle[axis]) {
-                        if (this.movementSpeed[axis] < this.minimumSpeed) {
-                            this.movementSpeed[axis] = this.minimumSpeed;
+                        if (this.movementSpeed[axis] <
+                                this.minimumSpeed[axis]) {
+                            this.movementSpeed[axis] = this.minimumSpeed[axis];
                         }
 
-                        if (this.movementSpeed[axis] < this.maximumSpeed) {
+                        if (this.movementSpeed[axis] <
+                                this.maximumSpeed[axis]) {
                             this.movementSpeed[axis] += (interval *
-                                this.acceleration);
+                                this.acceleration[axis]);
                         }
 
-                        if (this.movementSpeed[axis] > this.maximumSpeed) {
-                            this.movementSpeed[axis] = this.maximumSpeed;
+                        if (this.movementSpeed[axis] >
+                                this.maximumSpeed[axis]) {
+                            this.movementSpeed[axis] = this.maximumSpeed[axis];
                         }
                     } else {
-                        if (this.movementSpeed[axis] > this.minimumSpeed) {
+                        if (this.movementSpeed[axis] >
+                                this.minimumSpeed[axis]) {
                             this.movementSpeed[axis] -= (interval *
-                                this.acceleration);
+                                this.deceleration[axis]);
 
                             if (this.movementControlToggle[axis] !==
                                     constants.NO_MOVEMENT) {
                                 this.movementSpeed[axis] -= (interval *
-                                    this.acceleration);
+                                    this.acceleration[axis]);
                             }
                         }
 
-                        if (this.movementSpeed[axis] < this.minimumSpeed) {
+                        if (this.movementSpeed[axis] <
+                                this.minimumSpeed[axis]) {
                             this.movementSpeed[axis] = 0;
                         }
                     }
 
-                    if (this.movementSpeed[axis] > this.minimumSpeed) {
+                    if (this.movementSpeed[axis] > this.minimumSpeed[axis]) {
                         distance = interval * this.movementSpeed[axis] *
                             this.movementToggle[axis];
 
@@ -792,6 +831,8 @@ modules['interaction/actor/rotation'] = (function (constants) {
     return {
 
         initializeRotation: function (options) {
+            var defaults = constants.DEFAULTS.ROTATION;
+
             // Rotation variables.
             this.rotationToggle = {
                 x: constants.NO_MOVEMENT,
@@ -809,20 +850,62 @@ modules['interaction/actor/rotation'] = (function (constants) {
             this.gimbals = (_.isBoolean(options.gimbals) ?
                 options.gimbals : true);
 
+            this.rotationSensitivity = {
+                x: defaults.SENSITIVITY,
+                y: defaults.SENSITIVITY,
+                z: defaults.SENSITIVITY
+            };
+
+            this.rotationSpeed = {
+                x: defaults.SPEED,
+                y: defaults.SPEED,
+                z: defaults.SPEED
+            };
+
+            if (!_.isUndefined(options.controls) &&
+                    !_.isUndefined(options.controls.mouse)) {
+                this.setDefaultValues(options.controls.mouse.sensitivity,
+                    this.rotationSensitivity);
+            }
+
+            this.setDefaultValues(options.rotationSpeed, this.rotationSpeed);
+
+            if (_.isUndefined(options.gimbals)) {
+                this.rotationWithGimbals = true;
+
+                if (_.isArray(options.gimbals) &&
+                        options.gimbals.length === 3) {
+                    this.rotationAxes = options.gimbals;
+                } else {
+                    this.rotationAxes = defaults.ORDER;
+                }
+            } else {
+                this.rotationWithGimbals = false;
+
+                if (_.isArray(options.rotationOrder) &&
+                        options.rotationOrder.length === 3) {
+                    this.rotationAxes = options.rotationOrder;
+                } else {
+                    this.rotationAxes = defaults.ORDER;
+                }
+            }
+
             _.bindAll(this, 'cursorMove');
         },
 
         cursorMove: function (cursor, eventName, data) {
             var angles = {};
 
-            angles[this.rotationMouseControl.x] = -0.001 * data.x;
-            angles[this.rotationMouseControl.y] = -0.001 * data.y;
+            angles[this.rotationMouseControl.x] = this.rotationSensitivity.x *
+                constants.MOUSE_FACTOR * data.x;
+            angles[this.rotationMouseControl.y] = this.rotationSensitivity.y *
+                constants.MOUSE_FACTOR * data.y;
 
-            this.rotate(['x', 'z', 'y'], angles, true);
+            this.rotate(angles, true);
         },
 
         updateRotation: function (interval) {
-            this.rotate(['x', 'z', 'y'], interval);
+            this.rotate(interval);
         },
 
         getAngleIncrease: function (axis, angleData, exact) {
@@ -833,11 +916,35 @@ modules['interaction/actor/rotation'] = (function (constants) {
                     return angleData || 0;
                 }
             } else {
-                return 0.2 * angleData * this.rotationToggle[axis];
+                return this.rotationSpeed[axis] * angleData *
+                    this.rotationToggle[axis];
             }
         },
 
-        rotate: function (axes, angleData, exact) {
+        rotate: function (angleData, exact) {
+            if (this.rotationWithGimbals) {
+                this.rotateGimbals(this.rotationAxes, angleData, exact);
+            } else {
+                this.rotateDirect(this.rotationAxes, angleData, exact);
+            }
+        },
+
+        rotateDirect: function (order, angleData, exact) {
+
+            _.each(order, function (axis) {
+                var angleIncrease = this.getAngleIncrease(axis, angleData,
+                        exact);
+
+                switch (axis) {
+                    case 'x': this.rotateX(angleIncrease); break;
+                    case 'y': this.rotateY(angleIncrease); break;
+                    case 'z': this.rotateZ(angleIncrease); break;
+                }
+            }, this);
+
+        },
+
+        rotateGimbals: function (axes, angleData, exact) {
 
             var axis = _.first(axes),
                 angle = this.rotationAngle[axis],
@@ -850,7 +957,7 @@ modules['interaction/actor/rotation'] = (function (constants) {
                     case 'z': this.rotateZ(-angle); break;
                 }
 
-                this.rotate(_.rest(axes), angleData, exact);
+                this.rotateGimbals(_.rest(axes), angleData, exact);
             }
 
             if (angleIncrease !== 0) {
@@ -1065,6 +1172,22 @@ modules['interaction/actor'] = (function (Class,constants,movement,rotation,curs
                 this.rotationToggle[axis] = value;
             } else {
                 this.movementControlToggle[axis] = value;
+            }
+        },
+
+        setDefaultValues: function (configuration, target) {
+            if (!_.isUndefined(configuration)) {
+                if (_.isPlainObject(configuration)) {
+                    _.each(configuration, function (configValue, axis) {
+                        if (_.isNumber(configValue)) {
+                            target[axis] = configValue;
+                        }
+                    });
+                } else if (_.isNumber(configuration)) {
+                    _.each(target, function (targetValue, axis) {
+                        target[axis] = configuration;
+                    });
+                }
             }
         },
 
