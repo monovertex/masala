@@ -6,7 +6,7 @@ define([], function () {
         var lastTime = 0,
             vendors = ['webkit', 'moz'];
 
-        _.forEach(vendors, function (vendor) {
+        _.each(vendors, function (vendor) {
             if (_.isUndefined(root.requestAnimationFrame)) {
                 root.requestAnimationFrame =
                     root[vendor + 'RequestAnimationFrame'];
@@ -14,8 +14,6 @@ define([], function () {
                 root.cancelAnimationFrame =
                     root[vendor + 'CancelAnimationFrame'] ||
                     root[vendors + 'CancelRequestAnimationFrame'];
-            } else {
-                return false;
             }
         });
 

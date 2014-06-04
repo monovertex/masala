@@ -9,7 +9,7 @@ define([], function () {
             ')'
         );
 
-        _.forEach(args, function (arg) {
+        _.each(args, function (arg) {
             if (_.isUndefined(arg)) {
                 console.warn(
                     "Undefined passed to gl." + functionName + "(" +

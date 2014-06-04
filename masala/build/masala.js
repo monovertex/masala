@@ -53,12 +53,12 @@ modules['utility/class'] = (function () {
             }
         },
 
-        trigger: function (eventName) {
+        trigger: function (eventName, data) {
             if (eventName in this.listeners) {
-                _.forEach(this.listeners[eventName], function (listener) {
-                    _.forEach(listener, function (callback) {
+                _.each(this.listeners[eventName], function (listener) {
+                    _.each(listener, function (callback) {
                         if (_.isFunction(callback)) {
-                            callback(this, eventName);
+                            callback(this, eventName, data);
                         }
                     }, this);
                 }, this);
@@ -146,7 +146,7 @@ modules['gl/program'] = (function (Class,programConstants) {
         initialize: function (context, sources) {
             var program = context.createProgram();
 
-            _.forEach(sources, function(source, type) {
+            _.each(sources, function(source, type) {
                 var shader;
 
                 if (type === programConstants.TYPE.FRAGMENT) {
@@ -339,7 +339,7 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
             lastIndex,
             i;
 
-        _.forEach(lines, function (line) {
+        _.each(lines, function (line) {
             var dest;
 
             line = line.trim();
@@ -379,7 +379,7 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
             }
         }
 
-        _.forEach(raw.faces, function (face) {
+        _.each(raw.faces, function (face) {
 
             if (face.length === 3) {
                 indices.push(vertices.length);
@@ -396,7 +396,7 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
                 }
             } else return;
 
-            _.forEach(face, function (faceItem) {
+            _.each(face, function (faceItem) {
                 var faceItemData = faceItem.split('/'),
                     vertexRaw = raw.vertices[parseInt(
                         faceItemData[0], 10) - 1],
@@ -498,7 +498,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
             ), true);
 
             context.bindBuffer(context.ARRAY_BUFFER, vbo);
-            _.forEach(programs, this.linkAttributes, this);
+            _.each(programs, this.linkAttributes, this);
 
             context.bufferData(
                 context.ARRAY_BUFFER,
@@ -528,7 +528,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
             context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
 
-            _.forEach(this.programs, this.linkAttributes, this);
+            _.each(this.programs, this.linkAttributes, this);
 
             context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
 
@@ -580,39 +580,80 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
 }) (modules['geometry/constants'],modules['gl/program/constants'],modules['utility/class'],modules['geometry/mesh/parse']);
 
-
-modules['interaction/actor'] = (function (Class) {
+modules['interaction/actor/constants'] = (function () {
 
     var NO_MOVEMENT = 0,
         MOVE_POSITIVE = 1,
-        MOVE_NEGATIVE = -1,
-        CONTROLS = {
+        MOVE_NEGATIVE = -1;
+
+    return {
+        NO_MOVEMENT: NO_MOVEMENT,
+        MOVE_POSITIVE: MOVE_POSITIVE,
+        MOVE_NEGATIVE: MOVE_NEGATIVE,
+        ROTATIONS: {
+            'yaw': 'y',
+            'pitch': 'z',
+            'roll': 'x'
+        },
+        CONTROLS: {
             'forward': { axis: 'x', direction: MOVE_POSITIVE },
             'backward': { axis: 'x', direction: MOVE_NEGATIVE },
             'right': { axis: 'z', direction: MOVE_POSITIVE },
             'left': { axis: 'z', direction: MOVE_NEGATIVE },
             'up': { axis: 'y', direction: MOVE_POSITIVE },
-            'down': { axis: 'y', direction: MOVE_NEGATIVE }
-        };
+            'down': { axis: 'y', direction: MOVE_NEGATIVE },
 
-    return Class.extend({
-        initialize: function (options) {
-            this.up = glm.vec3.fromValues(0, 1, 0);
-            this.right = glm.vec3.create();
-
-            this.speed = { x: 0, y: 0, z: 0 };
-            this.toggle = { x: NO_MOVEMENT, y: NO_MOVEMENT, z: NO_MOVEMENT };
-            this.movement = { x: NO_MOVEMENT, y: NO_MOVEMENT, z: NO_MOVEMENT };
-
-            if (_.isUndefined(options.forward)) {
-                this.forward = glm.vec3.fromValues(1, 0, 0);
-            } else {
-                this.forward = glm.vec3.fromValues(
-                    _.isNumber(options.forward.x) ? options.forward.x : 1,
-                    _.isNumber(options.forward.y) ? options.forward.y : 0,
-                    _.isNumber(options.forward.z) ? options.forward.z : 0
-                );
+            'rollLeft': {
+                axis: 'x',
+                direction: MOVE_NEGATIVE,
+                rotation: true
+            },
+            'rollRight': {
+                axis: 'x',
+                direction: MOVE_POSITIVE,
+                rotation: true
+            },
+            'yawLeft': {
+                axis: 'y',
+                direction: MOVE_POSITIVE,
+                rotation: true
+            },
+            'yawRight': {
+                axis: 'y',
+                direction: MOVE_NEGATIVE,
+                rotation: true
+            },
+            'pitchUp': {
+                axis: 'z',
+                direction: MOVE_POSITIVE,
+                rotation: true
+            },
+            'pitchDown': {
+                axis: 'z',
+                direction: MOVE_NEGATIVE,
+                rotation: true
             }
+        }
+    };
+}) ();
+
+modules['interaction/actor/movement'] = (function (constants) {
+
+    return {
+
+        initializeMovement: function (options) {
+            this.movementSpeed = { x: 0, y: 0, z: 0 };
+            this.movementControlToggle = {
+                x: constants.NO_MOVEMENT,
+                y: constants.NO_MOVEMENT,
+                z: constants.NO_MOVEMENT
+            };
+            this.movementToggle =  {
+                x: constants.NO_MOVEMENT,
+                y: constants.NO_MOVEMENT,
+                z: constants.NO_MOVEMENT
+            };
+            this.accelerationToggle =  { x: false, y: false, z: false };
 
             if (_.isUndefined(options.speed)) {
                 this.minimumSpeed = 0;
@@ -628,80 +669,98 @@ modules['interaction/actor'] = (function (Class) {
             this.acceleration = _.isNumber(options.acceleration) ?
                 options.acceleration : 3;
 
-            this.setControls(options.controls);
+            // Directional vectors.
+            if (this.checkVector(options.forward)) {
+                this.forward = glm.vec3.fromValues(options.forward.x,
+                    options.forward.y, options.forward.z);
+                glm.vec3.normalize(this.forward, this.forward);
+            } else {
+                this.forward = glm.vec3.fromValues(1, 0, 0);
+            }
 
+            if (this.checkVector(options.up)) {
+                this.up = glm.vec3.fromValues(options.up.x,
+                    options.up.y, options.up.z);
+                glm.vec3.normalize(this.up, this.up);
+            } else {
+                this.up = glm.vec3.fromValues(0, 1, 0);
+            }
+
+            this.right = glm.vec3.create();
             glm.vec3.cross(this.right, this.forward, this.up);
+            glm.vec3.normalize(this.right, this.right);
+
+            glm.vec3.cross(this.up, this.right, this.forward);
+            glm.vec3.normalize(this.up, this.up);
         },
 
-        setNode: function (node) {
-            this.node = node;
-        },
+        updateMovement: function (interval) {
 
-        update: function (interval) {
-            _.forEach(this.toggle, function (axisToggle, axis) {
-                var accelerate = axisToggle != NO_MOVEMENT,
-                    distance;
+            _.each(['x', 'y', 'z'], function (axis) {
+                var distance;
 
-                if (accelerate) {
-                    this.movement[axis] = axisToggle;
-                }
+                if (this.movementToggle[axis] !== constants.NO_MOVEMENT) {
+                    if (this.accelerationToggle[axis]) {
+                        if (this.movementSpeed[axis] < this.minimumSpeed) {
+                            this.movementSpeed[axis] = this.minimumSpeed;
+                        }
 
-                if (accelerate) {
-                    if (this.speed[axis] < this.minimumSpeed) {
-                        this.speed[axis] = this.minimumSpeed;
-                    } else if (this.speed[axis] < this.maximumSpeed) {
-                        this.speed[axis] += interval * this.acceleration;
-                    } else if (this.speed[axis] > this.maximumSpeed) {
-                        this.speed[axis] = this.maximumSpeed;
+                        if (this.movementSpeed[axis] < this.maximumSpeed) {
+                            this.movementSpeed[axis] += (interval *
+                                this.acceleration);
+                        }
+
+                        if (this.movementSpeed[axis] > this.maximumSpeed) {
+                            this.movementSpeed[axis] = this.maximumSpeed;
+                        }
+                    } else {
+                        if (this.movementSpeed[axis] > this.minimumSpeed) {
+                            this.movementSpeed[axis] -= (interval *
+                                this.acceleration);
+
+                            if (this.movementControlToggle[axis] !==
+                                    constants.NO_MOVEMENT) {
+                                this.movementSpeed[axis] -= (interval *
+                                    this.acceleration);
+                            }
+                        }
+
+                        if (this.movementSpeed[axis] < this.minimumSpeed) {
+                            this.movementSpeed[axis] = 0;
+                        }
                     }
-                } else {
-                    if (this.speed[axis] > this.minimumSpeed) {
-                        this.speed[axis] -= interval * this.acceleration;
-                    } else if (this.speed[axis] < this.minimumSpeed) {
-                        this.speed[axis] = 0;
-                    }
-                }
 
-                if (this.speed[axis] > this.minimumSpeed) {
-                    if (this.movement[axis] != NO_MOVEMENT) {
-                        distance = interval * this.speed[axis] *
-                            this.movement[axis];
+                    if (this.movementSpeed[axis] > this.minimumSpeed) {
+                        distance = interval * this.movementSpeed[axis] *
+                            this.movementToggle[axis];
 
                         switch (axis) {
                             case 'x': this.moveForward(distance); break;
                             case 'y': this.moveUp(distance); break;
                             case 'z': this.moveRight(distance); break;
                         }
+                    } else {
+                        this.movementToggle[axis] = constants.NO_MOVEMENT;
                     }
-                } else {
-                    this.movement[axis] = NO_MOVEMENT;
                 }
 
-            }, this);
+                if (this.movementToggle[axis] === constants.NO_MOVEMENT &&
+                        this.movementControlToggle[axis] !==
+                        constants.NO_MOVEMENT) {
+                    this.movementToggle[axis] =
+                        this.movementControlToggle[axis];
+                }
 
-            return this;
-        },
+                if (this.movementToggle[axis] ===
+                        this.movementControlToggle[axis]) {
+                    this.accelerationToggle[axis] = true;
+                }
 
-        toggleControl: function (toggle, axis, direction) {
-            this.toggle[axis] = (toggle ? direction : NO_MOVEMENT);
-        },
+                if (this.movementControlToggle[axis] ===
+                        constants.NO_MOVEMENT) {
+                    this.accelerationToggle[axis] = false;
+                }
 
-        setControls: function (controls) {
-            _.forEach(controls, function (key, control) {
-                control = CONTROLS[control];
-
-                this.listenToKey(
-                    key,
-
-                    (function () {
-                        this.toggleControl(true, control.axis,
-                            control.direction);
-                    }).bind(this),
-
-                    (function () {
-                        this.toggleControl(false, control.axis);
-                    }).bind(this)
-                );
             }, this);
         },
 
@@ -712,18 +771,343 @@ modules['interaction/actor'] = (function (Class) {
                 glm.vec3.multiply([], direction, [distance, distance, distance])
             );
         },
+
         moveForward: function (distance) {
             this.move(this.forward, distance);
         },
+
         moveUp: function (distance) {
             this.move(this.up, distance);
         },
+
         moveRight: function (distance) {
             this.move(this.right, distance);
+        },
+    };
+
+}) (modules['interaction/actor/constants']);
+
+modules['interaction/actor/rotation'] = (function (constants) {
+
+    return {
+
+        initializeRotation: function (options) {
+            // Rotation variables.
+            this.rotationToggle = {
+                x: constants.NO_MOVEMENT,
+                y: constants.NO_MOVEMENT,
+                z: constants.NO_MOVEMENT
+            };
+
+            this.rotationMouseControl = {
+                'x': constants.ROTATIONS.NONE,
+                'y': constants.ROTATIONS.NONE
+            };
+
+            this.rotationAngle = { x: 0, y: 0, z: 0 };
+
+            this.gimbals = (_.isBoolean(options.gimbals) ?
+                options.gimbals : true);
+
+            _.bindAll(this, 'cursorMove');
+        },
+
+        cursorMove: function (cursor, eventName, data) {
+            var angles = {};
+
+            angles[this.rotationMouseControl.x] = -0.001 * data.x;
+            angles[this.rotationMouseControl.y] = -0.001 * data.y;
+
+            this.rotate(['x', 'z', 'y'], angles, true);
+        },
+
+        updateRotation: function (interval) {
+            this.rotate(['x', 'z', 'y'], interval);
+        },
+
+        getAngleIncrease: function (axis, angleData, exact) {
+            if (exact) {
+                if (_.isPlainObject(angleData)) {
+                    return angleData[axis] || 0;
+                } else {
+                    return angleData || 0;
+                }
+            } else {
+                return 0.2 * angleData * this.rotationToggle[axis];
+            }
+        },
+
+        rotate: function (axes, angleData, exact) {
+
+            var axis = _.first(axes),
+                angle = this.rotationAngle[axis],
+                angleIncrease = this.getAngleIncrease(axis, angleData, exact);
+
+            if (axes.length > 1) {
+                switch (axis) {
+                    case 'x': this.rotateX(-angle); break;
+                    case 'y': this.rotateY(-angle); break;
+                    case 'z': this.rotateZ(-angle); break;
+                }
+
+                this.rotate(_.rest(axes), angleData, exact);
+            }
+
+            if (angleIncrease !== 0) {
+                angle += angleIncrease;
+                this.rotationAngle[axis] = angle;
+
+                if (axes.length === 1) {
+                    switch (axis) {
+                        case 'x': this.rotateX(angleIncrease); break;
+                        case 'y': this.rotateY(angleIncrease); break;
+                        case 'z': this.rotateZ(angleIncrease); break;
+                    }
+                }
+            }
+
+            if (axes.length > 1) {
+                switch (axis) {
+                    case 'x': this.rotateX(angle); break;
+                    case 'y': this.rotateY(angle); break;
+                    case 'z': this.rotateZ(angle); break;
+                }
+            }
+        },
+
+        rotateX: function (angle) {
+            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
+                this.forward, angle);
+
+            glm.vec3.normalize(this.up,
+                glm.vec3.transformQuat(this.up, this.up, rotation));
+            glm.vec3.normalize(this.right,
+                glm.vec3.transformQuat(this.right, this.right, rotation));
+        },
+
+        rotateY: function (angle) {
+            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
+                this.up, angle);
+
+            glm.vec3.normalize(this.forward,
+                glm.vec3.transformQuat(this.forward, this.forward, rotation));
+            glm.vec3.normalize(this.right,
+                glm.vec3.transformQuat(this.right, this.right, rotation));
+        },
+
+        rotateZ: function (angle) {
+            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
+                this.right, angle);
+
+            glm.vec3.normalize(this.up,
+                glm.vec3.transformQuat(this.up, this.up, rotation));
+            glm.vec3.normalize(this.forward,
+                glm.vec3.transformQuat(this.forward, this.forward, rotation));
+        }
+    };
+
+}) (modules['interaction/actor/constants']);
+
+
+modules['interaction/cursor/lock'] = (function () {
+
+    var el = document.body,
+        vendorUtilities = {
+            'native': {
+                detect: function () {
+                    return 'pointerLockElement' in document;
+                },
+                getLockElement: function () {
+                    return document.pointerLockElement;
+                },
+                getEventName: _.constant('pointerlockchange'),
+                getMovementX: _.constant('movementX'),
+                getMovementY: _.constant('movementY'),
+                lock: el.requestPointerLock,
+                exitLock: document.exitPointerLock
+            },
+            'moz': {
+                detect: function () {
+                    return 'mozPointerLockElement' in document;
+                },
+                getLockElement: function () {
+                    return document.mozPointerLockElement;
+                },
+                getEventName: _.constant('mozpointerlockchange'),
+                getMovementX: _.constant('mozMovementX'),
+                getMovementY: _.constant('mozMovementY'),
+                lock: el.mozRequestPointerLock,
+                exitLock: document.mozExitPointerLock
+            },
+            'webkit': {
+                detect: function () {
+                    return 'webkitPointerLockElement' in document;
+                },
+                getLockElement: function () {
+                    return document.webkitPointerLockElement;
+                },
+                getEventName: _.constant('webkitpointerlockchange'),
+                getMovementX: _.constant('webkitMovementX'),
+                getMovementY: _.constant('webkitMovementY'),
+                lock: el.webkitRequestPointerLock,
+                exitLock: document.webkitExitPointerLock
+            }
+        };
+
+    var utility;
+
+    _.each(vendorUtilities, function (vendorUtility) {
+        if (vendorUtility.detect()) {
+            utility = vendorUtility;
         }
     });
 
-}) (modules['utility/class']);
+    utility.lock = utility.lock.bind(el);
+    utility.exitLock = utility.exitLock.bind(document);
+
+    return _.extend(utility, {
+
+        requestLock: function () {
+            if (this.lockRequests > 0) {
+                this.lock();
+            }
+        },
+
+        addLockRequest: function () {
+            this.lockRequests = this.lockRequests || 0;
+            this.lockRequests++;
+        },
+
+        removeLockRequest: function () {
+            this.lockRequests = this.lockRequests || 1;
+            this.lockRequests--;
+
+            if (this.lockRequests === 0 && this.isLocked()) {
+                this.exitLock();
+            }
+        },
+
+        getElement: function () {
+            return el;
+        },
+
+        isLocked: function () {
+            return this.getLockElement() === this.getElement();
+        }
+
+    });
+
+}) ();
+
+modules['interaction/cursor'] = (function (namespace,Class,lock) {
+
+    var Cursor = Class.extend(_.extend({
+
+        initialize: function () {
+            _.bindAll(this, 'mouseMove');
+
+            document.addEventListener(this.getEventName(), (function () {
+                if (this.isLocked()) {
+                    document.addEventListener('mousemove', this.mouseMove);
+                } else {
+                    document.removeEventListener('mousemove', this.mouseMove);
+                }
+            }).bind(this));
+        },
+
+        mouseMove: function (ev) {
+            var x = ev[this.getMovementX()],
+                y = ev[this.getMovementY()];
+
+            this.trigger('move', { x: x, y: y });
+        }
+
+    }, lock));
+
+    namespace.cursor = namespace.cursor || new Cursor();
+
+    return namespace.cursor;
+
+}) (modules['utility/namespace'],modules['utility/class'],modules['interaction/cursor/lock']);
+
+
+modules['interaction/actor'] = (function (Class,constants,movement,rotation,cursor) {
+
+    return Class.extend(_.extend({
+        initialize: function (options) {
+
+            this.initializeMovement(options);
+
+            this.initializeRotation(options);
+
+            this.setControls(options.controls);
+
+        },
+
+        checkVector: function (v) {
+            return (!_.isUndefined(v) && _.isNumber(v.x) &&
+                _.isNumber(v.y) && _.isNumber(v.z));
+        },
+
+        setNode: function (node) {
+            this.node = node;
+        },
+
+        update: function (interval) {
+            this.updateRotation(interval);
+            this.updateMovement(interval);
+        },
+
+        toggleControl: function (toggle, rotation, axis, direction) {
+            var value = (toggle ? direction : constants.NO_MOVEMENT);
+
+            if (rotation) {
+                this.rotationToggle[axis] = value;
+            } else {
+                this.movementControlToggle[axis] = value;
+            }
+        },
+
+        setControls: function (controls) {
+            var mouse = false;
+            this.rotationMouseControl.x = constants.ROTATIONS.NONE;
+            this.rotationMouseControl.y = constants.ROTATIONS.NONE;
+
+            _.each(controls, function (key, control) {
+                if (control === 'mouse') {
+                    mouse = true;
+                    this.rotationMouseControl.x = constants.ROTATIONS[key.x];
+                    this.rotationMouseControl.y = constants.ROTATIONS[key.y];
+                } else {
+                    control = constants.CONTROLS[control];
+
+                    this.listenToKey(
+                        key,
+
+                        (function () {
+                            this.toggleControl(true, control.rotation,
+                                control.axis, control.direction);
+                        }).bind(this),
+
+                        (function () {
+                            this.toggleControl(false, control.rotation,
+                                control.axis);
+                        }).bind(this)
+                    );
+                }
+            }, this);
+
+            if (mouse) {
+                cursor.addLockRequest();
+                this.listen(cursor, 'move', this.cursorMove);
+            } else {
+                cursor.removeLockRequest();
+                // this.stopListening(cursor, 'move', this.cursorMove);
+            }
+        }
+    }, movement, rotation));
+
+}) (modules['utility/class'],modules['interaction/actor/constants'],modules['interaction/actor/movement'],modules['interaction/actor/rotation'],modules['interaction/cursor']);
 
 
 modules['interaction/camera'] = (function (Actor) {
@@ -805,7 +1189,7 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
                         materials: {}
                     };
 
-                _.forEach(sources.programs, function (source, key) {
+                _.each(sources.programs, function (source, key) {
                     resources.programs[key] = new Program(this.context,
                         source.shaders);
 
@@ -814,24 +1198,24 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
                     }
                 }, this);
 
-                _.forEach(sources.meshes, function (source, key) {
+                _.each(sources.meshes, function (source, key) {
                     resources.meshes[key] = new Mesh(this.context, source,
                         resources.programs);
                 }, this);
 
-                _.forEach(sources.actors, function (source, key) {
+                _.each(sources.actors, function (source, key) {
                     resources.actors[key] = source.object;
                 }, this);
 
-                _.forEach(sources.lights, function (source, key) {
+                _.each(sources.lights, function (source, key) {
                     resources.lights[key] = source.object;
                 }, this);
 
-                _.forEach(sources.materials, function (source, key) {
+                _.each(sources.materials, function (source, key) {
                     resources.materials[key] = source.object;
                 }, this);
 
-                _.forEach(sources.cameras, function (source, key) {
+                _.each(sources.cameras, function (source, key) {
                     resources.cameras[key] = source.object;
 
                     if (source.default) {
@@ -881,7 +1265,7 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
             }
 
             if (!_.isUndefined(source.children)) {
-                _.forEach(source.children, function (source) {
+                _.each(source.children, function (source) {
                     var child = this.initializeNode(source, resources);
 
                     node.addChild(child);
@@ -901,7 +1285,7 @@ modules['shading/render'] = (function () {
             colors = [], anglesInner = [], anglesOuter = [],
             program = context._currentProgram;
 
-        _.forEach(lights, function (light) {
+        _.each(lights, function (light) {
             var data = light.output();
 
             types.push(data.type);
@@ -1007,7 +1391,7 @@ modules['utility/debug-output'] = (function () {
             ')'
         );
 
-        _.forEach(args, function (arg) {
+        _.each(args, function (arg) {
             if (_.isUndefined(arg)) {
                 console.warn(
                     "Undefined passed to gl." + functionName + "(" +
@@ -1021,7 +1405,7 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
@@ -1042,6 +1426,10 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput)
             this.context.enable(this.context.DEPTH_TEST);
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
+
+            this.canvas.addEventListener('click', function () {
+                cursor.requestLock();
+            });
         },
 
         setScene: function (scene, initialize) {
@@ -1069,7 +1457,7 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput)
 
     }, initialize, render));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['utility/debug-output']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -1194,7 +1582,7 @@ modules['utility/node'] = (function (Class) {
                 }
             }
 
-            _.forEach(this.children, function (child) {
+            _.each(this.children, function (child) {
                 child.render(context, resources);
             }, this);
         },
@@ -1221,7 +1609,7 @@ modules['utility/node'] = (function (Class) {
 
             this.modelMatrix = localModelMatrix;
 
-            _.forEach(this.children, function (child) {
+            _.each(this.children, function (child) {
                 child.prepareRender(localModelMatrix);
             }, this);
         },
@@ -1409,7 +1797,7 @@ modules['shading/material'] = (function (Class,Color) {
         initialize: function (options) {
             this.shininess = options.shininess;
 
-            _.forEach(
+            _.each(
                 ['emissive', 'ambient', 'diffuse', 'specular'],
                 function (component) {
                     this[component] = new Color(options[component]);
@@ -1474,7 +1862,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 children: []
             };
 
-            _.forEach(schema.tree, function (node) {
+            _.each(schema.tree, function (node) {
                 this.instantiateNode(this.sources.tree, node);
             }, this);
         },
@@ -1573,7 +1961,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             }
 
             if (!_.isUndefined(options.children) && _.isArray(options.children)) {
-                _.forEach(options.children, function (child) {
+                _.each(options.children, function (child) {
                     this.instantiateNode(node, child);
                 }, this);
             }
@@ -1596,13 +1984,13 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             if (!_.isUndefined(schema.programs) &&
                     _.isArray(schema.programs)) {
 
-                _.forEach(schema.programs, function (program) {
+                _.each(schema.programs, function (program) {
                     this.sources.programs[program.name] = {
                         default: program.default || false,
                         shaders: {}
                     };
 
-                    _.forEach(program.shaders, function (shader, key) {
+                    _.each(program.shaders, function (shader, key) {
 
                         if (shader.indexOf('SHADER') !== -1) {
                             var path = shader.split('.');
@@ -1632,7 +2020,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             if (!_.isUndefined(schema.meshes) &&
                     _.isArray(schema.meshes)) {
 
-                _.forEach(schema.meshes, function (mesh) {
+                _.each(schema.meshes, function (mesh) {
                     var source = mesh.source;
 
                     if (mesh.source.indexOf('MESH') !== -1) {
@@ -1701,11 +2089,11 @@ modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
             if (this.isLoaded()) {
                 var interval = (currentTime - this.previousTime) / 1000;
 
-                _.forEach(this.sources.actors, function (actor) {
+                _.each(this.sources.actors, function (actor) {
                     actor.object.update(interval);
                 }, this);
 
-                _.forEach(this.sources.cameras, function (camera) {
+                _.each(this.sources.cameras, function (camera) {
                     camera.object.update(interval);
                 }, this);
 

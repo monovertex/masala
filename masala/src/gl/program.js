@@ -9,7 +9,7 @@ define([
         initialize: function (context, sources) {
             var program = context.createProgram();
 
-            _.forEach(sources, function(source, type) {
+            _.each(sources, function(source, type) {
                 var shader;
 
                 if (type === programConstants.TYPE.FRAGMENT) {

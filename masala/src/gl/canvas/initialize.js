@@ -22,7 +22,7 @@ define([
                         materials: {}
                     };
 
-                _.forEach(sources.programs, function (source, key) {
+                _.each(sources.programs, function (source, key) {
                     resources.programs[key] = new Program(this.context,
                         source.shaders);
 
@@ -31,24 +31,24 @@ define([
                     }
                 }, this);
 
-                _.forEach(sources.meshes, function (source, key) {
+                _.each(sources.meshes, function (source, key) {
                     resources.meshes[key] = new Mesh(this.context, source,
                         resources.programs);
                 }, this);
 
-                _.forEach(sources.actors, function (source, key) {
+                _.each(sources.actors, function (source, key) {
                     resources.actors[key] = source.object;
                 }, this);
 
-                _.forEach(sources.lights, function (source, key) {
+                _.each(sources.lights, function (source, key) {
                     resources.lights[key] = source.object;
                 }, this);
 
-                _.forEach(sources.materials, function (source, key) {
+                _.each(sources.materials, function (source, key) {
                     resources.materials[key] = source.object;
                 }, this);
 
-                _.forEach(sources.cameras, function (source, key) {
+                _.each(sources.cameras, function (source, key) {
                     resources.cameras[key] = source.object;
 
                     if (source.default) {
@@ -98,7 +98,7 @@ define([
             }
 
             if (!_.isUndefined(source.children)) {
-                _.forEach(source.children, function (source) {
+                _.each(source.children, function (source) {
                     var child = this.initializeNode(source, resources);
 
                     node.addChild(child);

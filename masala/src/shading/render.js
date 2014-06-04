@@ -7,7 +7,7 @@ define([], function () {
             colors = [], anglesInner = [], anglesOuter = [],
             program = context._currentProgram;
 
-        _.forEach(lights, function (light) {
+        _.each(lights, function (light) {
             var data = light.output();
 
             types.push(data.type);

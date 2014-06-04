@@ -10,7 +10,7 @@ define([
         initialize: function (options) {
             this.shininess = options.shininess;
 
-            _.forEach(
+            _.each(
                 ['emissive', 'ambient', 'diffuse', 'specular'],
                 function (component) {
                     this[component] = new Color(options[component]);

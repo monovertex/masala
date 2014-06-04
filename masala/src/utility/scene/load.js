@@ -50,7 +50,7 @@ define([
                 children: []
             };
 
-            _.forEach(schema.tree, function (node) {
+            _.each(schema.tree, function (node) {
                 this.instantiateNode(this.sources.tree, node);
             }, this);
         },
@@ -149,7 +149,7 @@ define([
             }
 
             if (!_.isUndefined(options.children) && _.isArray(options.children)) {
-                _.forEach(options.children, function (child) {
+                _.each(options.children, function (child) {
                     this.instantiateNode(node, child);
                 }, this);
             }
@@ -172,13 +172,13 @@ define([
             if (!_.isUndefined(schema.programs) &&
                     _.isArray(schema.programs)) {
 
-                _.forEach(schema.programs, function (program) {
+                _.each(schema.programs, function (program) {
                     this.sources.programs[program.name] = {
                         default: program.default || false,
                         shaders: {}
                     };
 
-                    _.forEach(program.shaders, function (shader, key) {
+                    _.each(program.shaders, function (shader, key) {
 
                         if (shader.indexOf('SHADER') !== -1) {
                             var path = shader.split('.');
@@ -208,7 +208,7 @@ define([
             if (!_.isUndefined(schema.meshes) &&
                     _.isArray(schema.meshes)) {
 
-                _.forEach(schema.meshes, function (mesh) {
+                _.each(schema.meshes, function (mesh) {
                     var source = mesh.source;
 
                     if (mesh.source.indexOf('MESH') !== -1) {

@@ -50,11 +50,11 @@ function (Class, namespace, load, loadFile) {
             if (this.isLoaded()) {
                 var interval = (currentTime - this.previousTime) / 1000;
 
-                _.forEach(this.sources.actors, function (actor) {
+                _.each(this.sources.actors, function (actor) {
                     actor.object.update(interval);
                 }, this);
 
-                _.forEach(this.sources.cameras, function (camera) {
+                _.each(this.sources.cameras, function (camera) {
                     camera.object.update(interval);
                 }, this);
 

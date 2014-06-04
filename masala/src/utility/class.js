@@ -28,12 +28,12 @@ define([], function () {
             }
         },
 
-        trigger: function (eventName) {
+        trigger: function (eventName, data) {
             if (eventName in this.listeners) {
-                _.forEach(this.listeners[eventName], function (listener) {
-                    _.forEach(listener, function (callback) {
+                _.each(this.listeners[eventName], function (listener) {
+                    _.each(listener, function (callback) {
                         if (_.isFunction(callback)) {
-                            callback(this, eventName);
+                            callback(this, eventName, data);
                         }
                     }, this);
                 }, this);

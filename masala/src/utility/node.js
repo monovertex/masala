@@ -65,7 +65,7 @@ function (Class) {
                 }
             }
 
-            _.forEach(this.children, function (child) {
+            _.each(this.children, function (child) {
                 child.render(context, resources);
             }, this);
         },
@@ -92,7 +92,7 @@ function (Class) {
 
             this.modelMatrix = localModelMatrix;
 
-            _.forEach(this.children, function (child) {
+            _.each(this.children, function (child) {
                 child.prepareRender(localModelMatrix);
             }, this);
         },

@@ -7,8 +7,10 @@ define([
     'gl/canvas/initialize',
     'gl/canvas/render',
 
-    'utility/debug-output'
-], function (namespace, Class, initialize, render, debugOutput) {
+    'utility/debug-output',
+
+    'interaction/cursor'
+], function (namespace, Class, initialize, render, debugOutput, cursor) {
 
     return Class.extend(_.extend({
 
@@ -29,6 +31,10 @@ define([
             this.context.enable(this.context.DEPTH_TEST);
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
+
+            this.canvas.addEventListener('click', function () {
+                cursor.requestLock();
+            });
         },
 
         setScene: function (scene, initialize) {

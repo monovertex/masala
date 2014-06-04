@@ -146,7 +146,13 @@
                     "right": "d",
                     "left": "a",
                     "up": "e",
-                    "down": "q"
+                    "down": "q",
+                    "rollLeft": "z",
+                    "rollRight": "c",
+                    "mouse": {
+                        "x": "yaw",
+                        "y": "pitch"
+                    }
                 },
                 "speed": {
                     "min": 0,

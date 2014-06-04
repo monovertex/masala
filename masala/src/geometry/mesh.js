@@ -36,7 +36,7 @@ define([
             ), true);
 
             context.bindBuffer(context.ARRAY_BUFFER, vbo);
-            _.forEach(programs, this.linkAttributes, this);
+            _.each(programs, this.linkAttributes, this);
 
             context.bufferData(
                 context.ARRAY_BUFFER,
@@ -66,7 +66,7 @@ define([
 
             context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
 
-            _.forEach(this.programs, this.linkAttributes, this);
+            _.each(this.programs, this.linkAttributes, this);
 
             context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
 

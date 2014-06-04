@@ -1,57 +1,27 @@
 
 
 define([
-    'utility/class'
-], function (Class) {
+    'utility/class',
+    'interaction/actor/constants',
+    'interaction/actor/movement',
+    'interaction/actor/rotation',
+    'interaction/cursor'
+], function (Class, constants, movement, rotation, cursor) {
 
-    var NO_MOVEMENT = 0,
-        MOVE_POSITIVE = 1,
-        MOVE_NEGATIVE = -1,
-        CONTROLS = {
-            'forward': { axis: 'x', direction: MOVE_POSITIVE },
-            'backward': { axis: 'x', direction: MOVE_NEGATIVE },
-            'right': { axis: 'z', direction: MOVE_POSITIVE },
-            'left': { axis: 'z', direction: MOVE_NEGATIVE },
-            'up': { axis: 'y', direction: MOVE_POSITIVE },
-            'down': { axis: 'y', direction: MOVE_NEGATIVE }
-        };
-
-    return Class.extend({
+    return Class.extend(_.extend({
         initialize: function (options) {
-            this.up = glm.vec3.fromValues(0, 1, 0);
-            this.right = glm.vec3.create();
 
-            this.speed = { x: 0, y: 0, z: 0 };
-            this.toggle = { x: NO_MOVEMENT, y: NO_MOVEMENT, z: NO_MOVEMENT };
-            this.movement = { x: NO_MOVEMENT, y: NO_MOVEMENT, z: NO_MOVEMENT };
+            this.initializeMovement(options);
 
-            if (_.isUndefined(options.forward)) {
-                this.forward = glm.vec3.fromValues(1, 0, 0);
-            } else {
-                this.forward = glm.vec3.fromValues(
-                    _.isNumber(options.forward.x) ? options.forward.x : 1,
-                    _.isNumber(options.forward.y) ? options.forward.y : 0,
-                    _.isNumber(options.forward.z) ? options.forward.z : 0
-                );
-            }
-
-            if (_.isUndefined(options.speed)) {
-                this.minimumSpeed = 0;
-                this.maximumSpeed = 10;
-            } else {
-                this.minimumSpeed = _.isNumber(options.speed.min) ?
-                    options.speed.min : 0;
-                this.maximumSpeed = _.isNumber(options.speed.max) ?
-                    options.speed.max : _.isNumber(options.speed) ?
-                    options.speed : 10;
-            }
-
-            this.acceleration = _.isNumber(options.acceleration) ?
-                options.acceleration : 3;
+            this.initializeRotation(options);
 
             this.setControls(options.controls);
 
-            glm.vec3.cross(this.right, this.forward, this.up);
+        },
+
+        checkVector: function (v) {
+            return (!_.isUndefined(v) && _.isNumber(v.x) &&
+                _.isNumber(v.y) && _.isNumber(v.z));
         },
 
         setNode: function (node) {
@@ -59,89 +29,57 @@ define([
         },
 
         update: function (interval) {
-            _.forEach(this.toggle, function (axisToggle, axis) {
-                var accelerate = axisToggle != NO_MOVEMENT,
-                    distance;
-
-                if (accelerate) {
-                    this.movement[axis] = axisToggle;
-                }
-
-                if (accelerate) {
-                    if (this.speed[axis] < this.minimumSpeed) {
-                        this.speed[axis] = this.minimumSpeed;
-                    } else if (this.speed[axis] < this.maximumSpeed) {
-                        this.speed[axis] += interval * this.acceleration;
-                    } else if (this.speed[axis] > this.maximumSpeed) {
-                        this.speed[axis] = this.maximumSpeed;
-                    }
-                } else {
-                    if (this.speed[axis] > this.minimumSpeed) {
-                        this.speed[axis] -= interval * this.acceleration;
-                    } else if (this.speed[axis] < this.minimumSpeed) {
-                        this.speed[axis] = 0;
-                    }
-                }
-
-                if (this.speed[axis] > this.minimumSpeed) {
-                    if (this.movement[axis] != NO_MOVEMENT) {
-                        distance = interval * this.speed[axis] *
-                            this.movement[axis];
-
-                        switch (axis) {
-                            case 'x': this.moveForward(distance); break;
-                            case 'y': this.moveUp(distance); break;
-                            case 'z': this.moveRight(distance); break;
-                        }
-                    }
-                } else {
-                    this.movement[axis] = NO_MOVEMENT;
-                }
-
-            }, this);
-
-            return this;
+            this.updateRotation(interval);
+            this.updateMovement(interval);
         },
 
-        toggleControl: function (toggle, axis, direction) {
-            this.toggle[axis] = (toggle ? direction : NO_MOVEMENT);
+        toggleControl: function (toggle, rotation, axis, direction) {
+            var value = (toggle ? direction : constants.NO_MOVEMENT);
+
+            if (rotation) {
+                this.rotationToggle[axis] = value;
+            } else {
+                this.movementControlToggle[axis] = value;
+            }
         },
 
         setControls: function (controls) {
-            _.forEach(controls, function (key, control) {
-                control = CONTROLS[control];
+            var mouse = false;
+            this.rotationMouseControl.x = constants.ROTATIONS.NONE;
+            this.rotationMouseControl.y = constants.ROTATIONS.NONE;
 
-                this.listenToKey(
-                    key,
+            _.each(controls, function (key, control) {
+                if (control === 'mouse') {
+                    mouse = true;
+                    this.rotationMouseControl.x = constants.ROTATIONS[key.x];
+                    this.rotationMouseControl.y = constants.ROTATIONS[key.y];
+                } else {
+                    control = constants.CONTROLS[control];
 
-                    (function () {
-                        this.toggleControl(true, control.axis,
-                            control.direction);
-                    }).bind(this),
+                    this.listenToKey(
+                        key,
 
-                    (function () {
-                        this.toggleControl(false, control.axis);
-                    }).bind(this)
-                );
+                        (function () {
+                            this.toggleControl(true, control.rotation,
+                                control.axis, control.direction);
+                        }).bind(this),
+
+                        (function () {
+                            this.toggleControl(false, control.rotation,
+                                control.axis);
+                        }).bind(this)
+                    );
+                }
             }, this);
-        },
 
-        move: function (direction, distance) {
-            glm.vec3.add(
-                this.node.position,
-                this.node.position,
-                glm.vec3.multiply([], direction, [distance, distance, distance])
-            );
-        },
-        moveForward: function (distance) {
-            this.move(this.forward, distance);
-        },
-        moveUp: function (distance) {
-            this.move(this.up, distance);
-        },
-        moveRight: function (distance) {
-            this.move(this.right, distance);
+            if (mouse) {
+                cursor.addLockRequest();
+                this.listen(cursor, 'move', this.cursorMove);
+            } else {
+                cursor.removeLockRequest();
+                // this.stopListening(cursor, 'move', this.cursorMove);
+            }
         }
-    });
+    }, movement, rotation));
 
 });

@@ -22,7 +22,7 @@ define([
             lastIndex,
             i;
 
-        _.forEach(lines, function (line) {
+        _.each(lines, function (line) {
             var dest;
 
             line = line.trim();
@@ -62,7 +62,7 @@ define([
             }
         }
 
-        _.forEach(raw.faces, function (face) {
+        _.each(raw.faces, function (face) {
 
             if (face.length === 3) {
                 indices.push(vertices.length);
@@ -79,7 +79,7 @@ define([
                 }
             } else return;
 
-            _.forEach(face, function (faceItem) {
+            _.each(face, function (faceItem) {
                 var faceItemData = faceItem.split('/'),
                     vertexRaw = raw.vertices[parseInt(
                         faceItemData[0], 10) - 1],
