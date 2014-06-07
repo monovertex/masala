@@ -16,8 +16,58 @@ define([
 
     return {
 
-        load: function () {
-            var schema = this.schema;
+        load: function (schema) {
+            var parsedSchema, sources;
+
+            sources = {
+                meshNames: schema.meshes,
+                meshSources: {},
+                textureNames: {},
+                textureOptions: [],
+                textureSources: {},
+                programs: {},
+                actorOptions: schema.actors,
+                cameraOptions: schema.cameras,
+                lightOptions: schema.lights,
+                cameras: [],
+                actors: [],
+                lights: [],
+                materials: {},
+                tree: []
+            };
+            this.sources = sources;
+
+            // Grab resource information.
+            parsedSchema = {
+                meshPaths: [],
+                texturePaths: []
+            };
+            this.parsedSchema = parsedSchema;
+
+            // Meshes.
+            _.each(schema.meshes, function (path, name) {
+                if (_.indexOf(parsedSchema.meshPaths, path) === -1) {
+                    parsedSchema.meshPaths.push(path);
+                }
+            });
+
+            // Textures.
+            _.each(schema.textures, function (options, name) {
+                sources.textureOptions.push(options);
+                sources.textureNames[name] = sources.textureOptions.length - 1;
+
+                if (_.indexOf(parsedSchema.texturePaths, options.path) === -1) {
+                    parsedSchema.texturePaths.push(options.path);
+                }
+            });
+
+            // Materials.
+            _.each(schema.materials, function(options, name) {
+                sources.materials[name] = new Material(options);
+            });
+
+            // Grab inline resource information.
+            _.each(schema.tree, this.parseNode, this);
 
             // Instantiate async resources.
             this.resourceCount = 0;
@@ -29,10 +79,13 @@ define([
                 },
                 0
             );
-            this.resourceCount += schema.meshes.length;
+            this.resourceCount += parsedSchema.meshPaths.length;
+            this.resourceCount += parsedSchema.texturePaths.length;
 
-            this.loadPrograms();
-            this.loadMeshes();
+            this.loadAsyncResources(schema.programs, this.loadProgram);
+            this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
+            this.loadAsyncResources(parsedSchema.texturePaths,
+                this.loadTexture);
 
             // Global material constants.
             this.sources.ambientLight = new Color(schema.ambientLight);
@@ -40,9 +93,6 @@ define([
             if (!_.isUndefined(schema.backgroundColor))
                 this.sources.backgroundColor =
                     new Color(schema.backgroundColor);
-
-            // Instantiate materials.
-            _.map(schema.materials, this.instantiateMaterial, this);
 
             // Instantiate tree.
             this.sources.tree = {
@@ -55,66 +105,67 @@ define([
             }, this);
         },
 
-        instantiateActor: function (options) {
-            var object = new Actor(options),
-                id = object.uid,
-                source = { object: object };
+        parseNode: function (node) {
+            if (!_.isUndefined(node.mesh) && _.isString(node.mesh)) {
+                if (node.mesh in this.sources.meshNames) {
+                    node.mesh = this.sources.meshNames[node.mesh];
+                } else {
+                    if (_.indexOf(this.parsedSchema.meshPaths,
+                            node.mesh) === -1) {
+                        this.parsedSchema.meshPaths.push(node.mesh);
+                    }
+                }
+            }
 
-            this.sources.actors[id] = source;
+            this.parseNodeTexture(node, 'texture');
+            this.parseNodeTexture(node, 'alphaTexture');
 
-            return source;
+            if (!_.isUndefined(node.children) && _.isArray(node.children)) {
+                _.each(node.children, this.parseNode, this);
+            }
         },
 
-        instantiateCamera: function (options) {
-            var object = new Camera(options),
-                id = object.uid,
-                source = {
-                    default: options.default || false,
-                    object: object
-                };
+        parseNodeTexture: function (node, prop) {
+            if (!_.isUndefined(node[prop])) {
+                if (_.isString(node[prop]) &&
+                        node[prop] in this.sources.textureNames) {
+                    node[prop] = this.sources.textureNames[node[prop]];
+                } else if (_.isPlainObject(node[prop])) {
+                    this.sources.textureOptions.push(node[prop]);
 
-            this.sources.cameras[id] = source;
+                    if (_.indexOf(this.parsedSchema.texturePaths,
+                            node[prop].path) === -1) {
+                        this.parsedSchema.texturePaths.push(node[prop].path);
+                    }
 
-            return source;
+                    node[prop] = this.parsedSchema.texturePaths.length - 1;
+                }
+            }
         },
 
         instantiateLight: function (options) {
-            var object, source;
+            var light;
 
             switch (options.type) {
                 case lightingConstants.TYPE.POINT:
-                    object = new LightPoint(options);
+                    light = new LightPoint(options);
                     break;
                 case lightingConstants.TYPE.SPOT:
-                    object = new LightSpot(options);
+                    light = new LightSpot(options);
                     break;
             }
 
-            source = {
-                object: object
-            };
+            this.sources.lights.push(light);
 
-            this.sources.lights[object.uid] = source;
-
-            return source;
-        },
-
-        instantiateMaterial: function (options) {
-            var object = new Material(options),
-                id = options.name || object.uid,
-                source = { object: object };
-
-            this.sources.materials[id] = source;
-
-            return source;
+            return light;
         },
 
         instantiateNode: function (parent, options) {
             var node = {
                     name: options.name,
-                    object: new Node(options),
                     children: []
-                };
+                },
+                light;
 
             // Set mesh.
             if (!_.isUndefined(options.mesh)) {
@@ -122,30 +173,59 @@ define([
 
                 // Instantiate material.
                 if (!_.isUndefined(options.material)) {
-                    if (_.isString(options.material)) {
-                        node.material = options.material;
-                    } else {
-                        node.material = this.instantiateMaterial(
-                            options.material).object.uid;
-                    }
+                    options.material = this.instantiateNodeProperty(
+                        options.material,
+                        this.sources.materials,
+                        function (options) { return options; },
+                        function (options) {
+                            return new Material(options);
+                        }
+                    );
+                }
+
+                // Set texture.
+                if (!_.isUndefined(options.texture)) {
+                    node.texture = options.texture;
+                }
+
+                // Set alpha texture.
+                if (!_.isUndefined(options.alphaTexture)) {
+                    node.alphaTexture = options.alphaTexture;
                 }
             }
 
             // Instantiate actor.
-            if (!_.isUndefined(options.actor)) {
-                node.actor = this.instantiateActor(options.actor).object.uid;
-            }
+            options.actor = this.instantiateNodeProperty(options.actor,
+                this.sources.actorOptions, function (options) {
+                    var actor = new Actor(options);
+
+                    this.sources.actors.push(actor);
+
+                    return actor;
+                });
 
             // Instantiate camera.
-            if (!_.isUndefined(options.camera)) {
-                node.camera = this.instantiateCamera(options.camera)
-                    .object.uid;
-            }
+            options.camera = this.instantiateNodeProperty(options.camera,
+                this.sources.cameraOptions, function (options) {
+                    var camera = new Camera(options);
+
+                    this.sources.cameras.push(camera);
+                    if (options.default) {
+                        this.sources.defaultCamera = camera;
+                    }
+
+                    return camera;
+                });
+
+            // Instantiate node.
+            node.object = new Node(options);
 
             // Instantiate light.
-            if (!_.isUndefined(options.light)) {
-                node.light = this.instantiateLight(options.light)
-                    .object.uid;
+            light = this.instantiateNodeProperty(options.light,
+                this.sources.lightOptions, this.instantiateLight);
+
+            if (!_.isUndefined(light)) {
+                light.setNode(node.object);
             }
 
             if (!_.isUndefined(options.children) && _.isArray(options.children)) {
@@ -157,6 +237,22 @@ define([
             parent.children.push(node);
         },
 
+        instantiateNodeProperty: function (prop, sources, constructor,
+                constructorNew) {
+            var instance;
+
+            if (!_.isUndefined(prop)) {
+                if (_.isString(prop) && prop in sources) {
+                    instance = constructor.call(this, sources[prop]);
+                } else if (_.isPlainObject(prop)) {
+                    instance = (_.isUndefined(constructorNew) ? constructor :
+                        constructorNew).call(this, prop);
+                }
+            }
+
+            return instance;
+        },
+
         resourceLoaded: function () {
             this.resourceCount--;
 
@@ -166,67 +262,66 @@ define([
             }
         },
 
-        loadPrograms: function () {
-            var schema = this.schema;
-
-            if (!_.isUndefined(schema.programs) &&
-                    _.isArray(schema.programs)) {
-
-                _.each(schema.programs, function (program) {
-                    this.sources.programs[program.name] = {
-                        default: program.default || false,
-                        shaders: {}
-                    };
-
-                    _.each(program.shaders, function (shader, key) {
-
-                        if (shader.indexOf('SHADER') !== -1) {
-                            var path = shader.split('.');
-
-                            if (path[1] in programConstants.PREDEFINED &&
-                                    path[2] in programConstants
-                                        .PREDEFINED[path[1]]) {
-                                shader = this.config.paths.shaders +
-                                    programConstants
-                                        .PREDEFINED[path[1]][path[2]];
-                            }
-                        }
-
-                        loadFile(shader, (function (source) {
-                            this.sources.programs[program.name].shaders[key] =
-                                source;
-                            this.resourceLoaded();
-                        }).bind(this));
-                    }, this);
-                }, this);
+        loadAsyncResources: function (resources, callback) {
+            if (!_.isUndefined(resources) && (_.isArray(resources) ||
+                    _.isPlainObject(resources))) {
+                _.each(resources, callback, this);
             }
         },
 
-        loadMeshes: function () {
-            var schema = this.schema;
+        loadProgram: function (options, name) {
+            this.sources.programs[name] = {
+                default: options.default || false,
+                shaders: {}
+            };
 
-            if (!_.isUndefined(schema.meshes) &&
-                    _.isArray(schema.meshes)) {
+            _.each(options.shaders, function (path, key) {
 
-                _.each(schema.meshes, function (mesh) {
-                    var source = mesh.source;
+                if (path.indexOf('SHADER') !== -1) {
+                    var splitPath = path.split('.');
 
-                    if (mesh.source.indexOf('MESH') !== -1) {
-                        var path = mesh.source.split('.');
-
-                        if (path[1] in geometryConstants.MESHES) {
-                            source = this.config.paths.meshes +
-                                geometryConstants.MESHES[path[1]];
-                        }
+                    if (splitPath[1] in programConstants.PREDEFINED &&
+                            splitPath[2] in programConstants.PREDEFINED
+                            [splitPath[1]]) {
+                        path = this.config.paths.shaders + programConstants
+                            .PREDEFINED[splitPath[1]][splitPath[2]];
                     }
+                }
 
-                    loadFile(source, (function (source) {
-                        this.sources.meshes[mesh.name] = source;
+                loadFile(path, (function (source) {
+                    this.sources.programs[name].shaders[key] = source;
+                    this.resourceLoaded();
+                }).bind(this));
+            }, this);
+        },
 
-                        this.resourceLoaded();
-                    }).bind(this));
-                }, this);
+        loadMesh: function (path) {
+            var originalPath = path;
+
+            if (path.indexOf('MESH') !== -1) {
+                var splitPath = options.source.split('.');
+
+                if (splitPath[1] in geometryConstants.MESHES) {
+                    path = this.config.paths.meshes +
+                        geometryConstants.MESHES[splitPath[1]];
+                }
             }
+
+            loadFile(path, (function (source) {
+                this.sources.meshSources[originalPath] = source;
+                this.resourceLoaded();
+            }).bind(this));
+        },
+
+        loadTexture: function (path) {
+            var image = new Image();
+
+            image.addEventListener('load', (function () {
+                this.sources.textureSources[path] = image;
+                this.resourceLoaded();
+            }).bind(this));
+
+            image.src = path;
         }
 
     };

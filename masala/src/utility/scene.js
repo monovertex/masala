@@ -14,21 +14,10 @@ function (Class, namespace, load, loadFile) {
             this.config = _.merge({}, namespace.config.SCENE, config);
 
             loadFile(path, (function (raw) {
-                this.schema = JSON.parse(raw);
-                this.load();
+                this.load(JSON.parse(raw));
             }).bind(this));
 
             this.loading = true;
-
-            this.sources = {
-                meshes: {},
-                programs: {},
-                tree: [],
-                actors: {},
-                cameras: {},
-                lights: {},
-                materials: {}
-            };
 
             _.bindAll(this, 'resourceLoaded', 'render');
 
@@ -51,11 +40,11 @@ function (Class, namespace, load, loadFile) {
                 var interval = (currentTime - this.previousTime) / 1000;
 
                 _.each(this.sources.actors, function (actor) {
-                    actor.object.update(interval);
+                    actor.update(interval);
                 }, this);
 
                 _.each(this.sources.cameras, function (camera) {
-                    camera.object.update(interval);
+                    camera.update(interval);
                 }, this);
 
                 this.sources.tree.object.prepareRender();

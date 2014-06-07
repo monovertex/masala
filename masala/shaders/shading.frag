@@ -3,6 +3,7 @@ precision mediump float;
 uniform vec3 eyePosition;
 varying vec3 vPositionGlobal;
 varying vec3 vNormalGlobal;
+varying vec2 texCoords;
 
 //==============================================================================
 
@@ -98,10 +99,27 @@ vec3 computeLight(vec3 V, bool spotlight, vec3 color, vec3 position,
 
 //==============================================================================
 
+uniform bool textured;
+uniform bool alphaTextured;
+uniform sampler2D colorTexture;
+uniform sampler2D alphaTexture;
+
+//==============================================================================
+
 void main(){
 
     vec3 V = eyePosition - vPositionGlobal;
     vec3 color = materialEmissiveK;
+
+    if (textured) {
+        color = texture2D(colorTexture, texCoords).xyz;
+    }
+
+    if (alphaTextured) {
+        if (texture2D(alphaTexture, texCoords).x < 0.5) {
+            discard;
+        }
+    }
 
     color += materialAmbientK * ambientLight;
 

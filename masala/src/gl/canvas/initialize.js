@@ -1,29 +1,41 @@
 
 define([
     'gl/program',
+    'gl/texture',
     'geometry/mesh',
     'interaction/camera'
-], function (Program, Mesh, Camera) {
+], function (Program, Texture, Mesh, Camera) {
 
     return {
         initializeScene: function (scene) {
 
             if (scene.isLoaded()) {
-                var sources = scene.sources,
+                var context = this.context,
+                    sources = scene.sources,
                     resources = {
                         ambientLight: sources.ambientLight,
                         backgroundColor: sources.backgroundColor,
                         programs: {},
                         meshes: {},
                         nodes: {},
-                        cameras: {},
-                        actors: {},
-                        lights: {},
-                        materials: {}
+                        lights: _.clone(sources.lights),
+                        actors: _.clone(sources.actors),
+                        camera: _.clone(sources.cameras),
+                        materials: _.clone(sources.materials),
+                        textures: {},
+
+                        allMeshes: {},
+                        allTextures: [],
+
+                        cameraOptions: _.clone(sources.cameraOptions),
+                        actorOptions: _.clone(sources.actorOptions),
+                        lightOptions: _.clone(sources.lightOptions),
                     };
 
+
+                // Programs.
                 _.each(sources.programs, function (source, key) {
-                    resources.programs[key] = new Program(this.context,
+                    resources.programs[key] = new Program(context,
                         source.shaders);
 
                     if (source.default) {
@@ -31,30 +43,30 @@ define([
                     }
                 }, this);
 
-                _.each(sources.meshes, function (source, key) {
-                    resources.meshes[key] = new Mesh(this.context, source,
+
+                // Meshes.
+                _.each(sources.meshSources, function (source, key) {
+                    resources.allMeshes[key] = new Mesh(context, source,
                         resources.programs);
                 }, this);
 
-                _.each(sources.actors, function (source, key) {
-                    resources.actors[key] = source.object;
-                }, this);
+                _.each(sources.meshNames, function (path, name) {
+                    resources.meshes[name] = resources.allMeshes[path];
+                });
 
-                _.each(sources.lights, function (source, key) {
-                    resources.lights[key] = source.object;
-                }, this);
+                // Textures.
+                _.each(sources.textureOptions, function (options, index) {
+                    options.source = sources.textureSources[options.path];
 
-                _.each(sources.materials, function (source, key) {
-                    resources.materials[key] = source.object;
-                }, this);
+                    resources.allTextures.push(new Texture(options, context));
 
-                _.each(sources.cameras, function (source, key) {
-                    resources.cameras[key] = source.object;
-
-                    if (source.default) {
-                        resources.cameras[key].use(this.context);
+                    if (!_.isUndefined(options.name)) {
+                        resources.textures[options.name] =
+                            resources.allTextures[index];
                     }
                 }, this);
+
+                sources.defaultCamera.use(context);
 
                 resources.tree = this.initializeNode(sources.tree, resources);
 
@@ -73,25 +85,9 @@ define([
         initializeNode: function (source, resources) {
             var node = source.object;
 
-            if (!_.isUndefined(source.mesh)) {
-                node.setMesh(source.mesh);
-            }
-
-            if (!_.isUndefined(source.camera)) {
-                node.setCamera(resources.cameras[source.camera]);
-            }
-
-            if (!_.isUndefined(source.actor)) {
-                node.setActor(resources.actors[source.actor]);
-            }
-
-            if (!_.isUndefined(source.light)) {
-                resources.lights[source.light].setNode(node);
-            }
-
-            if (!_.isUndefined(source.material)) {
-                node.setMaterial(resources.materials[source.material]);
-            }
+            node.mesh = source.mesh;
+            node.texture = source.texture;
+            node.alphaTexture = source.alphaTexture;
 
             if (!_.isUndefined(source.name)) {
                 resources.nodes[source.name] = node;

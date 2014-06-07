@@ -1,70 +1,61 @@
 {
     "ambientLight": { "r": 0.1, "g": 0.1, "b": 0.1 },
-    "programs": [
-        {
+    "programs": {
+        "shading": {
             "default": true,
-            "name": "shading",
             "shaders": {
                 "vertex": "SHADER.VERTEX.SHADING",
                 "fragment": "SHADER.FRAGMENT.SHADING"
             }
         },
-        {
-            "name": "basic",
+        "basic": {
             "shaders": {
                 "vertex": "SHADER.VERTEX.BASIC",
                 "fragment": "SHADER.FRAGMENT.BASIC"
             }
         }
-    ],
-    "meshes": [
-        {
-            "name": "dragon",
-            "source": "/masala/meshes/dragon.obj"
-        },
-        {
-            "name": "sphere",
-            "source": "/masala/meshes/sphere.obj"
-        },
-        {
-            "name": "cube",
-            "source": "/masala/meshes/cube.obj"
+    },
+    "meshes": {
+        "sphere": "/masala/meshes/sphere.obj",
+        "cube": "/masala/meshes/cube.obj"
+    },
+    "textures": {
+        "rock": {
+            "path": "/textures/rock.jpg",
+            "filter": "LINEAR",
+            "wrap": "MIRRORED_REPEAT"
         }
-    ],
-    "materials": [
-        {
-            "name": "red",
+    },
+    "materials": {
+        "red": {
             "shininess": 80,
             "emissive": { "r": 0.10, "b": 0.03, "g": 0.01 },
             "ambient": { "r": 0.16, "b": 0.16, "g": 0.16 },
             "diffuse": { "r": 0.38, "b": 0.3, "g": 0.24 },
             "specular": { "r": 1, "b": 0.9, "g": 0.9 }
         },
-        {
-            "name": "blue",
+        "blue": {
             "shininess": 0,
             "emissive": { "b": 0.10, "g": 0.03, "r": 0.01 },
             "ambient": { "b": 0.16, "g": 0.16, "r": 0.16 },
             "diffuse": { "b": 0.38, "g": 0.3, "r": 0.24 },
             "specular": { "b": 1, "g": 0.9, "r": 0.9 }
         },
-        {
-            "name": "green",
+        "green": {
             "shininess": 10,
             "emissive": { "g": 0.10, "r": 0.03, "b": 0.01 },
             "ambient": { "g": 0.16, "r": 0.16, "b": 0.16 },
             "diffuse": { "g": 0.38, "r": 0.3, "b": 0.24 },
             "specular": { "g": 1, "r": 0.9, "b": 0.9 }
         },
-        {
-            "name": "white",
+        "white": {
             "shininess": 100,
             "emissive": { "r": 0.87, "g": 0.87, "b": 0.87 },
             "ambient": { "r": 0, "g": 0, "b": 0 },
             "diffuse": { "r": 0, "g": 0, "b": 0 },
             "specular": { "r": 0, "g": 0, "b": 0 }
         }
-    ],
+    },
     "tree": [
         {
             "position": { "x": -5, "y": 5, "z": 5 },
@@ -91,11 +82,19 @@
         {
             "children": [
                 {
-                    "mesh": "dragon",
+                    "mesh": "/masala/meshes/dragon.obj",
                     "material": "red",
+                    "texture": "rock",
                     "position": { "y": 3, "z": 3 }
                 },
-                { "mesh": "sphere", "material": "blue" },
+                {
+                    "mesh": "sphere",
+                    "material": "blue",
+                    "texture": "rock",
+                    "alphaTexture": {
+                        "path": "/textures/alpha.jpg"
+                    }
+                },
                 {
                     "mesh": "sphere",
                     "material": "green",
@@ -103,7 +102,7 @@
                 },
                 {
                     "scale": { "x": 0.4, "y": 0.4, "z": 0.6 },
-                    "mesh": "cube",
+                    "mesh": "/masala/meshes/cube.obj",
                     "material": "red",
                     "position": { "x": -2, "y": 2, "z": -4 }
                 },

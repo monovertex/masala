@@ -162,8 +162,8 @@ modules['gl/program'] = (function (Class,programConstants) {
 
                 if (!context.getShaderParameter(shader,
                         context.COMPILE_STATUS)) {
-                    throw 'Shader compilation error ' +
-                        context.getShaderInfoLog(shader);
+                    console.log(context.getShaderInfoLog(shader));
+                    throw 'Shader compilation error ';
                 }
 
                 context.attachShader(program, shader);
@@ -217,6 +217,111 @@ modules['gl/program'] = (function (Class,programConstants) {
     });
 
 }) (modules['utility/class'],modules['gl/program/constants']);
+
+
+modules['gl/texture'] = (function (Class) {
+
+    return Class.extend({
+
+        initialize: function (options, context) {
+            var texture = context.createTexture(),
+                wrapS = 'REPEAT',
+                wrapT = 'REPEAT',
+                filterMag = 'NEAREST',
+                filterMin = 'NEAREST';
+
+            if (!_.isUndefined(options.wrap)) {
+                if (_.isString(options.wrap)) {
+                    wrapS = options.wrap;
+                    wrapT = wrapS;
+                } else {
+                    if (!_.isUndefined(options.wrap.s)) {
+                        wrapS = options.wrap.s;
+                    }
+
+                    if (!_.isUndefined(options.wrap.t)) {
+                        wrapT = options.wrap.t;
+                    }
+                }
+            }
+
+            if (!_.isUndefined(options.filter)) {
+                if (_.isString(options.filter)) {
+                    filterMag = options.filter;
+                    filterMin = filterMag;
+                } else {
+                    if (!_.isUndefined(options.filter.min)) {
+                        filterMin = options.filter.min;
+                    }
+
+                    if (!_.isUndefined(options.filter.mag)) {
+                        filterMag = options.filter.mag;
+                    }
+                }
+            }
+
+            // Create texture, inverse it.
+            context.bindTexture(context.TEXTURE_2D, texture);
+            context.pixelStorei(context.UNPACK_FLIP_Y_WEBGL, true);
+
+            // Wrap options.
+            context.texParameteri(
+                context.TEXTURE_2D,
+                context.TEXTURE_WRAP_S,
+                context[wrapS]
+            );
+            context.texParameteri(
+                context.TEXTURE_2D,
+                context.TEXTURE_WRAP_T,
+                context[wrapT]
+            );
+
+            // Filter options.
+            context.texParameteri(
+                context.TEXTURE_2D,
+                context.TEXTURE_MIN_FILTER,
+                context[filterMin]
+            );
+            context.texParameteri(
+                context.TEXTURE_2D,
+                context.TEXTURE_MAG_FILTER,
+                context[filterMag]
+            );
+
+            if (filterMin.indexOf('MIPMAP') !== -1) {
+                context.generateMipmap(context.TEXTURE_2D);
+            }
+
+            // Buffer data.
+            context.texImage2D(
+                context.TEXTURE_2D,
+                0,
+                context[options.format] || context.RGBA,
+                context[options.format] || context.RGBA,
+                context[options.type] || context.UNSIGNED_BYTE,
+                options.source
+            );
+
+            // Clear up binding point.
+            context.bindTexture(context.TEXTURE_2D, null);
+
+            this.texture = texture;
+            this.context = context;
+        },
+
+        render: function (unit, alpha) {
+            var context = this.context,
+                program = context._currentProgram,
+                uniformName = (alpha ? 'alphaTexture' : 'colorTexture');
+
+            context.activeTexture(context.TEXTURE0 + unit);
+            context.bindTexture(context.TEXTURE_2D, this.texture);
+            context.uniform1i(program.getUniformLoc(uniformName), unit);
+        }
+
+    });
+
+}) (modules['utility/class']);
 
 modules['utility/constants'] = {
     SIZE: {
@@ -1293,27 +1398,38 @@ modules['interaction/camera'] = (function (Actor) {
 
 }) (modules['interaction/actor']);
 
-modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
+modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
 
     return {
         initializeScene: function (scene) {
 
             if (scene.isLoaded()) {
-                var sources = scene.sources,
+                var context = this.context,
+                    sources = scene.sources,
                     resources = {
                         ambientLight: sources.ambientLight,
                         backgroundColor: sources.backgroundColor,
                         programs: {},
                         meshes: {},
                         nodes: {},
-                        cameras: {},
-                        actors: {},
-                        lights: {},
-                        materials: {}
+                        lights: _.clone(sources.lights),
+                        actors: _.clone(sources.actors),
+                        camera: _.clone(sources.cameras),
+                        materials: _.clone(sources.materials),
+                        textures: {},
+
+                        allMeshes: {},
+                        allTextures: [],
+
+                        cameraOptions: _.clone(sources.cameraOptions),
+                        actorOptions: _.clone(sources.actorOptions),
+                        lightOptions: _.clone(sources.lightOptions),
                     };
 
+
+                // Programs.
                 _.each(sources.programs, function (source, key) {
-                    resources.programs[key] = new Program(this.context,
+                    resources.programs[key] = new Program(context,
                         source.shaders);
 
                     if (source.default) {
@@ -1321,30 +1437,30 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
                     }
                 }, this);
 
-                _.each(sources.meshes, function (source, key) {
-                    resources.meshes[key] = new Mesh(this.context, source,
+
+                // Meshes.
+                _.each(sources.meshSources, function (source, key) {
+                    resources.allMeshes[key] = new Mesh(context, source,
                         resources.programs);
                 }, this);
 
-                _.each(sources.actors, function (source, key) {
-                    resources.actors[key] = source.object;
-                }, this);
+                _.each(sources.meshNames, function (path, name) {
+                    resources.meshes[name] = resources.allMeshes[path];
+                });
 
-                _.each(sources.lights, function (source, key) {
-                    resources.lights[key] = source.object;
-                }, this);
+                // Textures.
+                _.each(sources.textureOptions, function (options, index) {
+                    options.source = sources.textureSources[options.path];
 
-                _.each(sources.materials, function (source, key) {
-                    resources.materials[key] = source.object;
-                }, this);
+                    resources.allTextures.push(new Texture(options, context));
 
-                _.each(sources.cameras, function (source, key) {
-                    resources.cameras[key] = source.object;
-
-                    if (source.default) {
-                        resources.cameras[key].use(this.context);
+                    if (!_.isUndefined(options.name)) {
+                        resources.textures[options.name] =
+                            resources.allTextures[index];
                     }
                 }, this);
+
+                sources.defaultCamera.use(context);
 
                 resources.tree = this.initializeNode(sources.tree, resources);
 
@@ -1363,25 +1479,9 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
         initializeNode: function (source, resources) {
             var node = source.object;
 
-            if (!_.isUndefined(source.mesh)) {
-                node.setMesh(source.mesh);
-            }
-
-            if (!_.isUndefined(source.camera)) {
-                node.setCamera(resources.cameras[source.camera]);
-            }
-
-            if (!_.isUndefined(source.actor)) {
-                node.setActor(resources.actors[source.actor]);
-            }
-
-            if (!_.isUndefined(source.light)) {
-                resources.lights[source.light].setNode(node);
-            }
-
-            if (!_.isUndefined(source.material)) {
-                node.setMaterial(resources.materials[source.material]);
-            }
+            node.mesh = source.mesh;
+            node.texture = source.texture;
+            node.alphaTexture = source.alphaTexture;
 
             if (!_.isUndefined(source.name)) {
                 resources.nodes[source.name] = node;
@@ -1398,7 +1498,7 @@ modules['gl/canvas/initialize'] = (function (Program,Mesh,Camera) {
             return node;
         }
     };
-}) (modules['gl/program'],modules['geometry/mesh'],modules['interaction/camera']);
+}) (modules['gl/program'],modules['gl/texture'],modules['geometry/mesh'],modules['interaction/camera']);
 
 
 modules['shading/render'] = (function () {
@@ -1653,6 +1753,20 @@ modules['utility/node'] = (function (Class) {
             this.rotationMatrix = glm.mat4.create();
             this.position = glm.vec3.create();
 
+            if (!_.isUndefined(options.camera)) {
+                this.camera = options.camera;
+                this.camera.setNode(this);
+            }
+
+            if (!_.isUndefined(options.actor)) {
+                this.actor = options.actor;
+                this.actor.setNode(this);
+            }
+
+            if (!_.isUndefined(options.material)) {
+                this.material = options.material;
+            }
+
             if (!_.isUndefined(options.position)) {
                 this.setPosition(
                     _.isNumber(options.position.x) ? options.position.x : 0,
@@ -1670,24 +1784,6 @@ modules['utility/node'] = (function (Class) {
             }
         },
 
-        setCamera: function (camera) {
-            this.camera = camera;
-            this.camera.setNode(this);
-        },
-
-        setActor: function (actor) {
-            this.actor = actor;
-            this.actor.setNode(this);
-        },
-
-        setMesh: function (mesh) {
-            this.mesh = mesh;
-        },
-
-        setMaterial: function (material) {
-            this.material = material;
-        },
-
         render: function (context, resources) {
 
             if (context._currentCamera !== this.camera) {
@@ -1701,7 +1797,26 @@ modules['utility/node'] = (function (Class) {
                         this.material.render(context);
                     }
 
-                    resources.meshes[this.mesh].render();
+                    if (!_.isUndefined(this.texture)) {
+                        context.uniform1i(program.getUniformLoc('textured'), 1);
+
+                        resources.allTextures[this.texture].render(0);
+                    } else {
+                        context.uniform1i(program.getUniformLoc('textured'), 0);
+                    }
+
+                    if (!_.isUndefined(this.alphaTexture)) {
+                        context.uniform1i(
+                            program.getUniformLoc('alphaTextured'), 1);
+
+                        resources.allTextures[this.alphaTexture]
+                            .render(1, true);
+                    } else {
+                        context.uniform1i(
+                            program.getUniformLoc('alphaTextured'), 0);
+                    }
+
+                    resources.allMeshes[this.mesh].render();
                 }
             }
 
@@ -1740,7 +1855,6 @@ modules['utility/node'] = (function (Class) {
         addChild: function (child) {
             this.children[child.uid] = child;
         },
-
 
         move: function () {
             var displacement;
@@ -1951,8 +2065,58 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
     return {
 
-        load: function () {
-            var schema = this.schema;
+        load: function (schema) {
+            var parsedSchema, sources;
+
+            sources = {
+                meshNames: schema.meshes,
+                meshSources: {},
+                textureNames: {},
+                textureOptions: [],
+                textureSources: {},
+                programs: {},
+                actorOptions: schema.actors,
+                cameraOptions: schema.cameras,
+                lightOptions: schema.lights,
+                cameras: [],
+                actors: [],
+                lights: [],
+                materials: {},
+                tree: []
+            };
+            this.sources = sources;
+
+            // Grab resource information.
+            parsedSchema = {
+                meshPaths: [],
+                texturePaths: []
+            };
+            this.parsedSchema = parsedSchema;
+
+            // Meshes.
+            _.each(schema.meshes, function (path, name) {
+                if (_.indexOf(parsedSchema.meshPaths, path) === -1) {
+                    parsedSchema.meshPaths.push(path);
+                }
+            });
+
+            // Textures.
+            _.each(schema.textures, function (options, name) {
+                sources.textureOptions.push(options);
+                sources.textureNames[name] = sources.textureOptions.length - 1;
+
+                if (_.indexOf(parsedSchema.texturePaths, options.path) === -1) {
+                    parsedSchema.texturePaths.push(options.path);
+                }
+            });
+
+            // Materials.
+            _.each(schema.materials, function(options, name) {
+                sources.materials[name] = new Material(options);
+            });
+
+            // Grab inline resource information.
+            _.each(schema.tree, this.parseNode, this);
 
             // Instantiate async resources.
             this.resourceCount = 0;
@@ -1964,10 +2128,13 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 },
                 0
             );
-            this.resourceCount += schema.meshes.length;
+            this.resourceCount += parsedSchema.meshPaths.length;
+            this.resourceCount += parsedSchema.texturePaths.length;
 
-            this.loadPrograms();
-            this.loadMeshes();
+            this.loadAsyncResources(schema.programs, this.loadProgram);
+            this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
+            this.loadAsyncResources(parsedSchema.texturePaths,
+                this.loadTexture);
 
             // Global material constants.
             this.sources.ambientLight = new Color(schema.ambientLight);
@@ -1975,9 +2142,6 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             if (!_.isUndefined(schema.backgroundColor))
                 this.sources.backgroundColor =
                     new Color(schema.backgroundColor);
-
-            // Instantiate materials.
-            _.map(schema.materials, this.instantiateMaterial, this);
 
             // Instantiate tree.
             this.sources.tree = {
@@ -1990,66 +2154,67 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             }, this);
         },
 
-        instantiateActor: function (options) {
-            var object = new Actor(options),
-                id = object.uid,
-                source = { object: object };
+        parseNode: function (node) {
+            if (!_.isUndefined(node.mesh) && _.isString(node.mesh)) {
+                if (node.mesh in this.sources.meshNames) {
+                    node.mesh = this.sources.meshNames[node.mesh];
+                } else {
+                    if (_.indexOf(this.parsedSchema.meshPaths,
+                            node.mesh) === -1) {
+                        this.parsedSchema.meshPaths.push(node.mesh);
+                    }
+                }
+            }
 
-            this.sources.actors[id] = source;
+            this.parseNodeTexture(node, 'texture');
+            this.parseNodeTexture(node, 'alphaTexture');
 
-            return source;
+            if (!_.isUndefined(node.children) && _.isArray(node.children)) {
+                _.each(node.children, this.parseNode, this);
+            }
         },
 
-        instantiateCamera: function (options) {
-            var object = new Camera(options),
-                id = object.uid,
-                source = {
-                    default: options.default || false,
-                    object: object
-                };
+        parseNodeTexture: function (node, prop) {
+            if (!_.isUndefined(node[prop])) {
+                if (_.isString(node[prop]) &&
+                        node[prop] in this.sources.textureNames) {
+                    node[prop] = this.sources.textureNames[node[prop]];
+                } else if (_.isPlainObject(node[prop])) {
+                    this.sources.textureOptions.push(node[prop]);
 
-            this.sources.cameras[id] = source;
+                    if (_.indexOf(this.parsedSchema.texturePaths,
+                            node[prop].path) === -1) {
+                        this.parsedSchema.texturePaths.push(node[prop].path);
+                    }
 
-            return source;
+                    node[prop] = this.parsedSchema.texturePaths.length - 1;
+                }
+            }
         },
 
         instantiateLight: function (options) {
-            var object, source;
+            var light;
 
             switch (options.type) {
                 case lightingConstants.TYPE.POINT:
-                    object = new LightPoint(options);
+                    light = new LightPoint(options);
                     break;
                 case lightingConstants.TYPE.SPOT:
-                    object = new LightSpot(options);
+                    light = new LightSpot(options);
                     break;
             }
 
-            source = {
-                object: object
-            };
+            this.sources.lights.push(light);
 
-            this.sources.lights[object.uid] = source;
-
-            return source;
-        },
-
-        instantiateMaterial: function (options) {
-            var object = new Material(options),
-                id = options.name || object.uid,
-                source = { object: object };
-
-            this.sources.materials[id] = source;
-
-            return source;
+            return light;
         },
 
         instantiateNode: function (parent, options) {
             var node = {
                     name: options.name,
-                    object: new Node(options),
                     children: []
-                };
+                },
+                light;
 
             // Set mesh.
             if (!_.isUndefined(options.mesh)) {
@@ -2057,30 +2222,59 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
                 // Instantiate material.
                 if (!_.isUndefined(options.material)) {
-                    if (_.isString(options.material)) {
-                        node.material = options.material;
-                    } else {
-                        node.material = this.instantiateMaterial(
-                            options.material).object.uid;
-                    }
+                    options.material = this.instantiateNodeProperty(
+                        options.material,
+                        this.sources.materials,
+                        function (options) { return options; },
+                        function (options) {
+                            return new Material(options);
+                        }
+                    );
+                }
+
+                // Set texture.
+                if (!_.isUndefined(options.texture)) {
+                    node.texture = options.texture;
+                }
+
+                // Set alpha texture.
+                if (!_.isUndefined(options.alphaTexture)) {
+                    node.alphaTexture = options.alphaTexture;
                 }
             }
 
             // Instantiate actor.
-            if (!_.isUndefined(options.actor)) {
-                node.actor = this.instantiateActor(options.actor).object.uid;
-            }
+            options.actor = this.instantiateNodeProperty(options.actor,
+                this.sources.actorOptions, function (options) {
+                    var actor = new Actor(options);
+
+                    this.sources.actors.push(actor);
+
+                    return actor;
+                });
 
             // Instantiate camera.
-            if (!_.isUndefined(options.camera)) {
-                node.camera = this.instantiateCamera(options.camera)
-                    .object.uid;
-            }
+            options.camera = this.instantiateNodeProperty(options.camera,
+                this.sources.cameraOptions, function (options) {
+                    var camera = new Camera(options);
+
+                    this.sources.cameras.push(camera);
+                    if (options.default) {
+                        this.sources.defaultCamera = camera;
+                    }
+
+                    return camera;
+                });
+
+            // Instantiate node.
+            node.object = new Node(options);
 
             // Instantiate light.
-            if (!_.isUndefined(options.light)) {
-                node.light = this.instantiateLight(options.light)
-                    .object.uid;
+            light = this.instantiateNodeProperty(options.light,
+                this.sources.lightOptions, this.instantiateLight);
+
+            if (!_.isUndefined(light)) {
+                light.setNode(node.object);
             }
 
             if (!_.isUndefined(options.children) && _.isArray(options.children)) {
@@ -2092,6 +2286,22 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             parent.children.push(node);
         },
 
+        instantiateNodeProperty: function (prop, sources, constructor,
+                constructorNew) {
+            var instance;
+
+            if (!_.isUndefined(prop)) {
+                if (_.isString(prop) && prop in sources) {
+                    instance = constructor.call(this, sources[prop]);
+                } else if (_.isPlainObject(prop)) {
+                    instance = (_.isUndefined(constructorNew) ? constructor :
+                        constructorNew).call(this, prop);
+                }
+            }
+
+            return instance;
+        },
+
         resourceLoaded: function () {
             this.resourceCount--;
 
@@ -2101,67 +2311,66 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             }
         },
 
-        loadPrograms: function () {
-            var schema = this.schema;
-
-            if (!_.isUndefined(schema.programs) &&
-                    _.isArray(schema.programs)) {
-
-                _.each(schema.programs, function (program) {
-                    this.sources.programs[program.name] = {
-                        default: program.default || false,
-                        shaders: {}
-                    };
-
-                    _.each(program.shaders, function (shader, key) {
-
-                        if (shader.indexOf('SHADER') !== -1) {
-                            var path = shader.split('.');
-
-                            if (path[1] in programConstants.PREDEFINED &&
-                                    path[2] in programConstants
-                                        .PREDEFINED[path[1]]) {
-                                shader = this.config.paths.shaders +
-                                    programConstants
-                                        .PREDEFINED[path[1]][path[2]];
-                            }
-                        }
-
-                        loadFile(shader, (function (source) {
-                            this.sources.programs[program.name].shaders[key] =
-                                source;
-                            this.resourceLoaded();
-                        }).bind(this));
-                    }, this);
-                }, this);
+        loadAsyncResources: function (resources, callback) {
+            if (!_.isUndefined(resources) && (_.isArray(resources) ||
+                    _.isPlainObject(resources))) {
+                _.each(resources, callback, this);
             }
         },
 
-        loadMeshes: function () {
-            var schema = this.schema;
+        loadProgram: function (options, name) {
+            this.sources.programs[name] = {
+                default: options.default || false,
+                shaders: {}
+            };
 
-            if (!_.isUndefined(schema.meshes) &&
-                    _.isArray(schema.meshes)) {
+            _.each(options.shaders, function (path, key) {
 
-                _.each(schema.meshes, function (mesh) {
-                    var source = mesh.source;
+                if (path.indexOf('SHADER') !== -1) {
+                    var splitPath = path.split('.');
 
-                    if (mesh.source.indexOf('MESH') !== -1) {
-                        var path = mesh.source.split('.');
-
-                        if (path[1] in geometryConstants.MESHES) {
-                            source = this.config.paths.meshes +
-                                geometryConstants.MESHES[path[1]];
-                        }
+                    if (splitPath[1] in programConstants.PREDEFINED &&
+                            splitPath[2] in programConstants.PREDEFINED
+                            [splitPath[1]]) {
+                        path = this.config.paths.shaders + programConstants
+                            .PREDEFINED[splitPath[1]][splitPath[2]];
                     }
+                }
 
-                    loadFile(source, (function (source) {
-                        this.sources.meshes[mesh.name] = source;
+                loadFile(path, (function (source) {
+                    this.sources.programs[name].shaders[key] = source;
+                    this.resourceLoaded();
+                }).bind(this));
+            }, this);
+        },
 
-                        this.resourceLoaded();
-                    }).bind(this));
-                }, this);
+        loadMesh: function (path) {
+            var originalPath = path;
+
+            if (path.indexOf('MESH') !== -1) {
+                var splitPath = options.source.split('.');
+
+                if (splitPath[1] in geometryConstants.MESHES) {
+                    path = this.config.paths.meshes +
+                        geometryConstants.MESHES[splitPath[1]];
+                }
             }
+
+            loadFile(path, (function (source) {
+                this.sources.meshSources[originalPath] = source;
+                this.resourceLoaded();
+            }).bind(this));
+        },
+
+        loadTexture: function (path) {
+            var image = new Image();
+
+            image.addEventListener('load', (function () {
+                this.sources.textureSources[path] = image;
+                this.resourceLoaded();
+            }).bind(this));
+
+            image.src = path;
         }
 
     };
@@ -2176,21 +2385,10 @@ modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
             this.config = _.merge({}, namespace.config.SCENE, config);
 
             loadFile(path, (function (raw) {
-                this.schema = JSON.parse(raw);
-                this.load();
+                this.load(JSON.parse(raw));
             }).bind(this));
 
             this.loading = true;
-
-            this.sources = {
-                meshes: {},
-                programs: {},
-                tree: [],
-                actors: {},
-                cameras: {},
-                lights: {},
-                materials: {}
-            };
 
             _.bindAll(this, 'resourceLoaded', 'render');
 
@@ -2213,11 +2411,11 @@ modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
                 var interval = (currentTime - this.previousTime) / 1000;
 
                 _.each(this.sources.actors, function (actor) {
-                    actor.object.update(interval);
+                    actor.update(interval);
                 }, this);
 
                 _.each(this.sources.cameras, function (camera) {
-                    camera.object.update(interval);
+                    camera.update(interval);
                 }, this);
 
                 this.sources.tree.object.prepareRender();

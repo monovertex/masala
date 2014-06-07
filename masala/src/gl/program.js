@@ -25,8 +25,8 @@ define([
 
                 if (!context.getShaderParameter(shader,
                         context.COMPILE_STATUS)) {
-                    throw 'Shader compilation error ' +
-                        context.getShaderInfoLog(shader);
+                    console.log(context.getShaderInfoLog(shader));
+                    throw 'Shader compilation error ';
                 }
 
                 context.attachShader(program, shader);

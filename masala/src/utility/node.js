@@ -13,6 +13,20 @@ function (Class) {
             this.rotationMatrix = glm.mat4.create();
             this.position = glm.vec3.create();
 
+            if (!_.isUndefined(options.camera)) {
+                this.camera = options.camera;
+                this.camera.setNode(this);
+            }
+
+            if (!_.isUndefined(options.actor)) {
+                this.actor = options.actor;
+                this.actor.setNode(this);
+            }
+
+            if (!_.isUndefined(options.material)) {
+                this.material = options.material;
+            }
+
             if (!_.isUndefined(options.position)) {
                 this.setPosition(
                     _.isNumber(options.position.x) ? options.position.x : 0,
@@ -30,24 +44,6 @@ function (Class) {
             }
         },
 
-        setCamera: function (camera) {
-            this.camera = camera;
-            this.camera.setNode(this);
-        },
-
-        setActor: function (actor) {
-            this.actor = actor;
-            this.actor.setNode(this);
-        },
-
-        setMesh: function (mesh) {
-            this.mesh = mesh;
-        },
-
-        setMaterial: function (material) {
-            this.material = material;
-        },
-
         render: function (context, resources) {
 
             if (context._currentCamera !== this.camera) {
@@ -61,7 +57,26 @@ function (Class) {
                         this.material.render(context);
                     }
 
-                    resources.meshes[this.mesh].render();
+                    if (!_.isUndefined(this.texture)) {
+                        context.uniform1i(program.getUniformLoc('textured'), 1);
+
+                        resources.allTextures[this.texture].render(0);
+                    } else {
+                        context.uniform1i(program.getUniformLoc('textured'), 0);
+                    }
+
+                    if (!_.isUndefined(this.alphaTexture)) {
+                        context.uniform1i(
+                            program.getUniformLoc('alphaTextured'), 1);
+
+                        resources.allTextures[this.alphaTexture]
+                            .render(1, true);
+                    } else {
+                        context.uniform1i(
+                            program.getUniformLoc('alphaTextured'), 0);
+                    }
+
+                    resources.allMeshes[this.mesh].render();
                 }
             }
 
@@ -100,7 +115,6 @@ function (Class) {
         addChild: function (child) {
             this.children[child.uid] = child;
         },
-
 
         move: function () {
             var displacement;
