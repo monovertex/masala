@@ -1,20 +1,11 @@
 {
     "ambientLight": { "r": 0.1, "g": 0.1, "b": 0.1 },
     "programs": {
-        "shading": {
-            "default": true,
-            "shaders": {
-                "vertex": "SHADER.VERTEX.SHADING",
-                "fragment": "SHADER.FRAGMENT.SHADING"
-            }
-        },
-        "basic": {
-            "shaders": {
-                "vertex": "SHADER.VERTEX.BASIC",
-                "fragment": "SHADER.FRAGMENT.BASIC"
-            }
-        }
+        "lighting": "SHADER.LIGHTING.PHONG",
+        "basic": "SHADER.BASIC",
+        "blur": "SHADER.POSTPROCESSING.BLUR"
     },
+    "defaultProgram": "lighting",
     "meshes": {
         "sphere": "/masala/meshes/sphere.obj",
         "cube": "/masala/meshes/cube.obj"
@@ -23,7 +14,7 @@
         "rock": {
             "path": "/textures/rock.jpg",
             "filter": "LINEAR",
-            "wrap": "MIRRORED_REPEAT"
+            "wrap": "REPEAT"
         }
     },
     "materials": {
@@ -84,16 +75,11 @@
                 {
                     "mesh": "/masala/meshes/dragon.obj",
                     "material": "red",
-                    "texture": "rock",
                     "position": { "y": 3, "z": 3 }
                 },
                 {
                     "mesh": "sphere",
-                    "material": "blue",
-                    "texture": "rock",
-                    "alphaTexture": {
-                        "path": "/textures/alpha.jpg"
-                    }
+                    "material": "blue"
                 },
                 {
                     "mesh": "sphere",
@@ -104,13 +90,18 @@
                     "scale": { "x": 0.4, "y": 0.4, "z": 0.6 },
                     "mesh": "/masala/meshes/cube.obj",
                     "material": "red",
-                    "position": { "x": -2, "y": 2, "z": -4 }
+                    "position": { "x": -2, "y": 2, "z": -4 },
+                    "texture": "rock",
+                    "alphaTexture": {
+                        "path": "/textures/alpha.jpg"
+                    }
                 },
                 {
                     "scale": { "x": 0.2, "y": 0.2, "z": 0.2 },
                     "mesh": "cube",
                     "material": "green",
-                    "position": { "x": 2, "z": 4 }
+                    "position": { "x": 2, "z": 4 },
+                    "texture": "rock"
                 }
             ]
         },

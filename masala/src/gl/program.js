@@ -64,7 +64,8 @@ define([
                 this.attributes[attribute] = context.getAttribLocation(
                     this.program, attribute);
 
-                if (this.attributes[attribute] >= 0) {
+                if (this.attributes[attribute] > 0 ||
+                        this.attributes[attribute] === 0) {
                     context.enableVertexAttribArray(this.attributes[attribute]);
                 }
             }

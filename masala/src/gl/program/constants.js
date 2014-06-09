@@ -5,13 +5,21 @@ define({
         FRAGMENT: 'fragment'
     },
     PREDEFINED: {
-        VERTEX: {
-            BASIC: 'basic.vert',
-            SHADING: 'shading.vert'
+        BASIC: {
+            vertex: 'basic.vert',
+            fragment: 'basic.frag'
         },
-        FRAGMENT: {
-            BASIC: 'basic.frag',
-            SHADING: 'shading.frag'
+        LIGHTING: {
+            PHONG: {
+                vertex: 'lighting/phong.vert',
+                fragment: 'lighting/phong.frag'
+            }
+        },
+        POSTPROCESSING: {
+            BLUR: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/blur.frag'
+            }
         }
     },
     ATTRIBUTES: {

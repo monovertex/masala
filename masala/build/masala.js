@@ -123,13 +123,21 @@ modules['gl/program/constants'] = {
         FRAGMENT: 'fragment'
     },
     PREDEFINED: {
-        VERTEX: {
-            BASIC: 'basic.vert',
-            SHADING: 'shading.vert'
+        BASIC: {
+            vertex: 'basic.vert',
+            fragment: 'basic.frag'
         },
-        FRAGMENT: {
-            BASIC: 'basic.frag',
-            SHADING: 'shading.frag'
+        LIGHTING: {
+            PHONG: {
+                vertex: 'lighting/phong.vert',
+                fragment: 'lighting/phong.frag'
+            }
+        },
+        POSTPROCESSING: {
+            BLUR: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/blur.frag'
+            }
         }
     },
     ATTRIBUTES: {
@@ -201,7 +209,8 @@ modules['gl/program'] = (function (Class,programConstants) {
                 this.attributes[attribute] = context.getAttribLocation(
                     this.program, attribute);
 
-                if (this.attributes[attribute] >= 0) {
+                if (this.attributes[attribute] > 0 ||
+                        this.attributes[attribute] === 0) {
                     context.enableVertexAttribArray(this.attributes[attribute]);
                 }
             }
@@ -288,25 +297,51 @@ modules['gl/texture'] = (function (Class) {
                 context[filterMag]
             );
 
+            // Buffer data.
+            if (_.isNull(options.source) ||
+                    options.source instanceof Float32Array) {
+                context.texImage2D(
+                    context.TEXTURE_2D,
+                    0,
+                    context[options.format] || context.RGBA,
+                    options.width,
+                    options.height,
+                    0,
+                    context[options.format] || context.RGBA,
+                    context[options.type] || context.UNSIGNED_BYTE,
+                    options.source
+                );
+
+                this.width = options.width;
+                this.height = options.height;
+
+            } else if (options.source instanceof Image) {
+                context.texImage2D(
+                    context.TEXTURE_2D,
+                    0,
+                    context[options.format] || context.RGBA,
+                    context[options.format] || context.RGBA,
+                    context[options.type] || context.UNSIGNED_BYTE,
+                    options.source
+                );
+            }
+
             if (filterMin.indexOf('MIPMAP') !== -1) {
                 context.generateMipmap(context.TEXTURE_2D);
             }
 
-            // Buffer data.
-            context.texImage2D(
-                context.TEXTURE_2D,
-                0,
-                context[options.format] || context.RGBA,
-                context[options.format] || context.RGBA,
-                context[options.type] || context.UNSIGNED_BYTE,
-                options.source
-            );
-
-            // Clear up binding point.
-            context.bindTexture(context.TEXTURE_2D, null);
-
             this.texture = texture;
             this.context = context;
+
+            this.unbind();
+        },
+
+        bind: function () {
+            this.context.bindTexture(this.context.TEXTURE_2D, this.texture);
+        },
+
+        unbind: function () {
+            this.context.bindTexture(this.context.TEXTURE_2D, null);
         },
 
         render: function (unit, alpha) {
@@ -315,7 +350,7 @@ modules['gl/texture'] = (function (Class) {
                 uniformName = (alpha ? 'alphaTexture' : 'colorTexture');
 
             context.activeTexture(context.TEXTURE0 + unit);
-            context.bindTexture(context.TEXTURE_2D, this.texture);
+            this.bind();
             context.uniform1i(program.getUniformLoc(uniformName), unit);
         }
 
@@ -557,16 +592,18 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
         return { vertices: vertices, indices: indices };
     }
 
-    return function (source) {
-        if (_.isString(source)) {
-            return parseObj(source);
-        } else {
-            return {
-                vertices: _.map(source.vertices, function (vertex) {
-                    return new Vertex(vertex);
-                }),
-                indices: _.flatten(source.indices, true)
-            };
+    return {
+        parse: function (source) {
+            if (_.isString(source)) {
+                return parseObj(source);
+            } else {
+                return {
+                    vertices: _.map(source.vertices, function (vertex) {
+                        return new Vertex(vertex);
+                    }),
+                    indices: _.flatten(source.indices, true)
+                };
+            }
         }
     };
 }) (modules['geometry/vertex'],modules['geometry/constants']);
@@ -574,16 +611,17 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
 
 modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,parse) {
 
-    return Class.extend({
+    return Class.extend(_.extend({
 
-        initialize: function (context, source, programs) {
+        initialize: function (context, source) {
             this.context = context;
-            this.programs = programs;
 
             var rawData = this.parse(source),
                 vbo = context.createBuffer(),
                 ibo = context.createBuffer(),
                 coordsList, flat, i, maxCoord = 0;
+
+            _.bindAll(this, 'linkAttributes');
 
             coordsList = _.flatten(_.reduce(
                 rawData.vertices,
@@ -603,7 +641,6 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
             ), true);
 
             context.bindBuffer(context.ARRAY_BUFFER, vbo);
-            _.each(programs, this.linkAttributes, this);
 
             context.bufferData(
                 context.ARRAY_BUFFER,
@@ -624,8 +661,6 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
             this.vbo = vbo;
             this.ibo = ibo;
             this.indexCount = rawData.indices.length;
-
-            _.bindAll(this, 'linkAttributes');
         },
 
         render: function () {
@@ -633,7 +668,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
             context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
 
-            _.each(this.programs, this.linkAttributes, this);
+            this.linkAttributes();
 
             context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
 
@@ -641,10 +676,9 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
                 context.UNSIGNED_SHORT, 0);
         },
 
-        parse: parse,
-
-        linkAttributes: function (program) {
+        linkAttributes: function () {
             var context = this.context,
+                program = context._currentProgram,
                 VERTEX = geometryConstants.VERTEX,
                 attributePosition = program.getAttribLoc(
                     programConstants.ATTRIBUTES.VERTEX_POSITION),
@@ -653,7 +687,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
                 attributeTexcoords = program.getAttribLoc(
                     programConstants.ATTRIBUTES.VERTEX_TEX_COORDS);
 
-            if (attributePosition >= 0) {
+            if (attributePosition > 0 || attributePosition === 0) {
                 context.vertexAttribPointer(
                     attributePosition,
                     VERTEX.ITEM_SIZE.POSITION,
@@ -662,7 +696,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
                 );
             }
 
-            if (attributeNormal >= 0) {
+            if (attributeNormal > 0 || attributeNormal === 0) {
                 context.vertexAttribPointer(
                     attributeNormal,
                     VERTEX.ITEM_SIZE.NORMAL,
@@ -671,7 +705,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
                 );
             }
 
-            if (attributeTexcoords >= 0) {
+            if (attributeTexcoords > 0 || attributeTexcoords === 0) {
                 context.vertexAttribPointer(
                     attributeTexcoords,
                     VERTEX.ITEM_SIZE.TEX_COORD,
@@ -681,7 +715,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
             }
         }
 
-    });
+    }, parse));
 
 }) (modules['geometry/constants'],modules['gl/program/constants'],modules['utility/class'],modules['geometry/mesh/parse']);
 
@@ -1424,24 +1458,28 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                         cameraOptions: _.clone(sources.cameraOptions),
                         actorOptions: _.clone(sources.actorOptions),
                         lightOptions: _.clone(sources.lightOptions),
-                    };
 
+                        defaultCamera: sources.defaultCamera
+                    };
 
                 // Programs.
                 _.each(sources.programs, function (source, key) {
-                    resources.programs[key] = new Program(context,
-                        source.shaders);
-
-                    if (source.default) {
-                        resources.programs[key].use();
-                    }
+                    resources.programs[key] = new Program(
+                        context,
+                        _.reduce(source, function (result, path, key) {
+                            result[key] = sources.shaders[path];
+                            return result;
+                        }, {})
+                    );
                 }, this);
+
+                resources.defaultProgram =
+                    resources.programs[sources.defaultProgram];
 
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
-                    resources.allMeshes[key] = new Mesh(context, source,
-                        resources.programs);
+                    resources.allMeshes[key] = new Mesh(context, source);
                 }, this);
 
                 _.each(sources.meshNames, function (path, name) {
@@ -1460,15 +1498,9 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                     }
                 }, this);
 
-                sources.defaultCamera.use(context);
-
                 resources.tree = this.initializeNode(sources.tree, resources);
 
                 this.scenes[scene.uid].resources = resources;
-
-                if (!_.isUndefined(this.sceneInitialize)) {
-                    this.sceneInitialize.call(this, resources);
-                }
 
             } else {
                 this.listen(scene, 'loaded', this.initializeScene);
@@ -1548,44 +1580,124 @@ modules['shading/render'] = (function () {
 
 }) ();
 
-modules['gl/canvas/render'] = (function (lightingRender) {
+modules['gl/canvas/constants'] = (function (Vertex) {
+
+    return  {
+        RTT: {
+            TEXTURE: {
+                filter: 'LINEAR',
+                wrap: 'CLAMP_TO_EDGE'
+            },
+            MESH: {
+                vertices: [
+                    [-1, -1, 0, 0, 0, 1, 0, 0],
+                    [-1, 1, 0, 0, 0, 1, 0, 1],
+                    [1, 1, 0, 0, 0, 1, 1, 1],
+                    [1, -1, 0, 0, 0, 1, 1, 0]
+                ],
+                indices: [[0, 1, 2], [0, 2, 3]]
+            },
+            PROGRAM: {
+                shaders: {
+                    vertex:
+                        'attribute vec3 vPosition;' +
+                        'attribute vec2 vTexCoords;' +
+                        'varying vec2 texCoords;' +
+
+                        'void main(void) {' +
+                            'texCoords = vTexCoords;' +
+                            'gl_Position = vec4(vPosition, 1);' +
+                        '}',
+                    fragment:
+                        'precision mediump float;' +
+                        'varying vec2 texCoords;' +
+
+                        'uniform sampler2D colorTexture;' +
+
+                        'void main() {' +
+                            'gl_FragColor = vec4(texture2D(' +
+                                'colorTexture, texCoords).xyz, 1);' +
+                        '}'
+                }
+            }
+        }
+    };
+
+}) (modules['geometry/vertex']);
+
+modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
     return {
         render: function () {
-            var color;
+            var color,
+                context = this.context,
+                canvas = this.canvas,
+                rtt = this.rtt,
+                resources,
+                scene;
 
             this.resize();
-
-            this.context.clear(this.context.COLOR_BUFFER_BIT |
-                    this.context.DEPTH_BUFFER_BIT);
 
             if (!_.isUndefined(this.scene) &&
                     !_.isUndefined(this.scenes[this.scene.uid]) &&
                     !_.isUndefined(this.scenes[this.scene.uid].resources)) {
 
-                var resources = this.scenes[this.scene.uid].resources;
+                scene = this.scenes[this.scene.uid];
+
+                rtt.framebuffer.bind();
+
+                this.clear();
+
+                context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+
+                resources = scene.resources;
+
+                this.useProgram(resources.defaultProgram);
+                this.useCamera(resources.defaultCamera);
+
+                if (_.isFunction(scene.beforeFrame)) {
+                    scene.beforeFrame.call(this, resources);
+                }
 
                 color = resources.backgroundColor ||
                     this.config.backgroundColor;
-                this.context.clearColor(color.r, color.g, color.b, 1);
+                context.clearColor(color.r, color.g, color.b, 1);
 
-                this.context.uniform3f(
-                    this.context._currentProgram.getUniformLoc('ambientLight'),
+                context.uniform3f(
+                    context._currentProgram.getUniformLoc('ambientLight'),
                     false, resources.ambientLight.r, resources.ambientLight.g,
                     resources.ambientLight.b);
 
-                this.context._currentCamera.render(this.canvas, this.context);
+                context._currentCamera.render(this.canvas, context);
 
-                lightingRender(this.context, resources.lights);
+                lightingRender(context, resources.lights);
 
-                resources.tree.render(this.context, resources);
+                resources.tree.render(context, resources);
+
+                rtt.framebuffer.unbind();
+
+                this.clear();
+
+                // Render the RTT texture to the quad.
+                context.viewport(0, 0, canvas.width, canvas.height);
+
+                rtt.program.use();
+
+                rtt.texture.render(0);
+
+                rtt.mesh.render();
 
             } else {
                 color = this.config.backgroundColor;
-                this.context.clearColor(color.r, color.g, color.b, 1);
+                context.clearColor(color.r, color.g, color.b, 1);
 
                 console.log('loading');
             }
+        },
+
+        clear: function () {
+            this.context.clear(this.context.COLOR_BUFFER_BIT |
+                this.context.DEPTH_BUFFER_BIT);
         },
 
         resize: function () {
@@ -1597,12 +1709,64 @@ modules['gl/canvas/render'] = (function (lightingRender) {
                 canvas.width = canvas.clientWidth;
                 canvas.height = canvas.clientHeight;
 
-                context.viewport(0, 0, canvas.width, canvas.height);
+                this.resizeRTT();
             }
         }
     };
 
-}) (modules['shading/render']);
+}) (modules['shading/render'],modules['gl/canvas/constants']);
+
+modules['gl/framebuffer'] = (function (Class) {
+
+    return Class.extend({
+
+        initialize: function (context) {
+            var framebuffer = context.createFramebuffer();
+
+            this.framebuffer = framebuffer;
+            this.context = context;
+        },
+
+        bind: function () {
+            this.context.bindFramebuffer(this.context.FRAMEBUFFER,
+                this.framebuffer);
+        },
+
+        unbind: function () {
+            this.context.bindFramebuffer(this.context.FRAMEBUFFER, null);
+        },
+
+        attachColor: function (texture) {
+            this.bind();
+
+            this.context.framebufferTexture2D(
+                this.context.FRAMEBUFFER,
+                this.context.COLOR_ATTACHMENT0,
+                this.context.TEXTURE_2D,
+                texture.texture,
+                0
+            );
+
+            this.unbind();
+        },
+
+        attachDepth: function (buffer) {
+            this.bind();
+
+            this.context.framebufferRenderbuffer(
+                this.context.FRAMEBUFFER,
+                this.context.DEPTH_ATTACHMENT,
+                this.context.RENDERBUFFER,
+                buffer
+            );
+
+            this.unbind();
+        }
+
+    });
+
+
+}) (modules['utility/class']);
 
 
 modules['utility/debug-output'] = (function () {
@@ -1628,25 +1792,31 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,Texture,constants,Framebuffer,Program,Mesh,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
         initialize: function (canvas, config) {
+            var context;
+
             this.config = _.extend({}, namespace.config.CANVAS, config);
 
             this.scenes = {};
 
             this.canvas = canvas;
-            this.context = canvas.getContext('webgl') ||
+            context = canvas.getContext('webgl') ||
                 canvas.getContext('experimental-webgl');
 
             if (this.config.debug) {
-                this.context = WebGLDebugUtils.makeDebugContext(
-                    this.context, undefined, debugOutput);
+                context = WebGLDebugUtils.makeDebugContext(context, undefined,
+                    debugOutput);
             }
 
-            this.context.enable(this.context.DEPTH_TEST);
+            context.enable(context.DEPTH_TEST);
+
+            this.context = context;
+
+            this.initializeRTT();
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
@@ -1655,15 +1825,68 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput,
             });
         },
 
-        setScene: function (scene, initialize) {
+        initializeRTT: function () {
+            var context = this.context,
+                rtt = {
+                    framebuffer: new Framebuffer(context),
+                    program: new Program(context, constants.RTT.PROGRAM.shaders)
+                };
+
+            this.rtt = rtt;
+
+            rtt.mesh = new Mesh(context, constants.RTT.MESH);
+
+            this.resizeRTT();
+        },
+
+        resizeRTT: function () {
+            var context = this.context,
+                rtt = this.rtt,
+                width = this.canvas.width * 2,
+                height = this.canvas.height * 2;
+
+            if (!_.isUndefined(rtt.texture)) {
+                delete rtt.texture;
+            }
+
+            rtt.texture = new Texture(
+                _.extend({
+                    source: null,
+                    width: width,
+                    height: height
+                }, constants.RTT.TEXTURE),
+                context
+            );
+
+            rtt.framebuffer.attachColor(rtt.texture);
+
+            if (!_.isUndefined(rtt.depthbuffer)) {
+                delete rtt.depthbuffer;
+            }
+
+            rtt.depthbuffer = context.createRenderbuffer();
+
+            context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
+            context.renderbufferStorage(
+                context.RENDERBUFFER,
+                context.DEPTH_COMPONENT16,
+                width,
+                height
+            );
+
+            rtt.framebuffer.attachDepth(rtt.depthbuffer);
+        },
+
+        setScene: function (scene, beforeFrame) {
 
             this.scene = scene;
-            this.sceneInitialize = initialize;
 
             if (_.isUndefined(this.scenes[scene.uid])) {
                 this.scenes[scene.uid] = {};
                 this.initializeScene(scene);
             }
+
+            this.scenes[scene.uid].beforeFrame = beforeFrame;
 
             this.listen(scene, 'render', this.render);
 
@@ -1680,7 +1903,7 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,debugOutput,
 
     }, initialize, render));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['utility/debug-output'],modules['interaction/cursor']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/texture'],modules['gl/canvas/constants'],modules['gl/framebuffer'],modules['gl/program'],modules['geometry/mesh'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -2071,17 +2294,29 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             sources = {
                 meshNames: schema.meshes,
                 meshSources: {},
+
                 textureNames: {},
                 textureOptions: [],
                 textureSources: {},
-                programs: {},
+
+                programs: schema.programs,
+                shaders: {},
+                defaultProgram: schema.defaultProgram,
+
                 actorOptions: schema.actors,
+
                 cameraOptions: schema.cameras,
+
                 lightOptions: schema.lights,
+
                 cameras: [],
+
                 actors: [],
+
                 lights: [],
+
                 materials: {},
+
                 tree: []
             };
             this.sources = sources;
@@ -2089,12 +2324,39 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             // Grab resource information.
             parsedSchema = {
                 meshPaths: [],
-                texturePaths: []
+                texturePaths: [],
+                shaderPaths: []
             };
             this.parsedSchema = parsedSchema;
 
+            // Shaders.
+            _.each(schema.programs, function (options, name) {
+                var pathChain;
+
+                if (_.isString(options) && options.indexOf('SHADER') === 0) {
+                    options = options.replace('SHADER', 'PREDEFINED');
+                    options = this.getDotChain(options, programConstants);
+
+                    if (_.isPlainObject(options)) {
+                        _.each(options, function (path, key) {
+                            options[key] = this.config.paths.shaders + path;
+                        }, this);
+
+                        schema.programs[name] = options;
+                    }
+                }
+
+                if (_.isPlainObject(options)) {
+                    _.each(options, function (path) {
+                        if (_.indexOf(parsedSchema.shaderPaths, path) === -1) {
+                            parsedSchema.shaderPaths.push(path);
+                        }
+                    });
+                }
+            }, this);
+
             // Meshes.
-            _.each(schema.meshes, function (path, name) {
+            _.each(schema.meshes, function (path) {
                 if (_.indexOf(parsedSchema.meshPaths, path) === -1) {
                     parsedSchema.meshPaths.push(path);
                 }
@@ -2121,17 +2383,11 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             // Instantiate async resources.
             this.resourceCount = 0;
 
-            this.resourceCount += _.reduce(
-                schema.programs,
-                function (memo, program) {
-                    return memo + _.size(program.shaders);
-                },
-                0
-            );
+            this.resourceCount += parsedSchema.shaderPaths.length;
             this.resourceCount += parsedSchema.meshPaths.length;
             this.resourceCount += parsedSchema.texturePaths.length;
 
-            this.loadAsyncResources(schema.programs, this.loadProgram);
+            this.loadAsyncResources(parsedSchema.shaderPaths, this.loadShader);
             this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
             this.loadAsyncResources(parsedSchema.texturePaths,
                 this.loadTexture);
@@ -2152,6 +2408,20 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             _.each(schema.tree, function (node) {
                 this.instantiateNode(this.sources.tree, node);
             }, this);
+        },
+
+        getDotChain: function (path, source) {
+            if (_.isString(path)) {
+                path = path.split('.');
+            }
+
+            var property = _.first(path);
+
+            if (path.length === 1) {
+                return source[property];
+            } else if (property in source) {
+                return this.getDotChain(_.rest(path), source[property]);
+            }
         },
 
         parseNode: function (node) {
@@ -2318,30 +2588,11 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             }
         },
 
-        loadProgram: function (options, name) {
-            this.sources.programs[name] = {
-                default: options.default || false,
-                shaders: {}
-            };
-
-            _.each(options.shaders, function (path, key) {
-
-                if (path.indexOf('SHADER') !== -1) {
-                    var splitPath = path.split('.');
-
-                    if (splitPath[1] in programConstants.PREDEFINED &&
-                            splitPath[2] in programConstants.PREDEFINED
-                            [splitPath[1]]) {
-                        path = this.config.paths.shaders + programConstants
-                            .PREDEFINED[splitPath[1]][splitPath[2]];
-                    }
-                }
-
-                loadFile(path, (function (source) {
-                    this.sources.programs[name].shaders[key] = source;
-                    this.resourceLoaded();
-                }).bind(this));
-            }, this);
+        loadShader: function (path) {
+            loadFile(path, (function (source) {
+                this.sources.shaders[path] = source;
+                this.resourceLoaded();
+            }).bind(this));
         },
 
         loadMesh: function (path) {
@@ -2438,7 +2689,8 @@ modules['utility/config'] = (function (Color) {
     var config = {
         CANVAS: {
             debug: false,
-            backgroundColor: new Color(0, 0, 0)
+            backgroundColor: new Color(0, 0, 0),
+            multisampling: 1
         },
 
         SCENE: {

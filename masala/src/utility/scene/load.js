@@ -4,6 +4,7 @@ define([
     'gl/program/constants',
     'geometry/constants',
     'shading/constants',
+
     'utility/node',
     'interaction/actor',
     'interaction/camera',
@@ -22,17 +23,29 @@ define([
             sources = {
                 meshNames: schema.meshes,
                 meshSources: {},
+
                 textureNames: {},
                 textureOptions: [],
                 textureSources: {},
-                programs: {},
+
+                programs: schema.programs,
+                shaders: {},
+                defaultProgram: schema.defaultProgram,
+
                 actorOptions: schema.actors,
+
                 cameraOptions: schema.cameras,
+
                 lightOptions: schema.lights,
+
                 cameras: [],
+
                 actors: [],
+
                 lights: [],
+
                 materials: {},
+
                 tree: []
             };
             this.sources = sources;
@@ -40,12 +53,39 @@ define([
             // Grab resource information.
             parsedSchema = {
                 meshPaths: [],
-                texturePaths: []
+                texturePaths: [],
+                shaderPaths: []
             };
             this.parsedSchema = parsedSchema;
 
+            // Shaders.
+            _.each(schema.programs, function (options, name) {
+                var pathChain;
+
+                if (_.isString(options) && options.indexOf('SHADER') === 0) {
+                    options = options.replace('SHADER', 'PREDEFINED');
+                    options = this.getDotChain(options, programConstants);
+
+                    if (_.isPlainObject(options)) {
+                        _.each(options, function (path, key) {
+                            options[key] = this.config.paths.shaders + path;
+                        }, this);
+
+                        schema.programs[name] = options;
+                    }
+                }
+
+                if (_.isPlainObject(options)) {
+                    _.each(options, function (path) {
+                        if (_.indexOf(parsedSchema.shaderPaths, path) === -1) {
+                            parsedSchema.shaderPaths.push(path);
+                        }
+                    });
+                }
+            }, this);
+
             // Meshes.
-            _.each(schema.meshes, function (path, name) {
+            _.each(schema.meshes, function (path) {
                 if (_.indexOf(parsedSchema.meshPaths, path) === -1) {
                     parsedSchema.meshPaths.push(path);
                 }
@@ -72,17 +112,11 @@ define([
             // Instantiate async resources.
             this.resourceCount = 0;
 
-            this.resourceCount += _.reduce(
-                schema.programs,
-                function (memo, program) {
-                    return memo + _.size(program.shaders);
-                },
-                0
-            );
+            this.resourceCount += parsedSchema.shaderPaths.length;
             this.resourceCount += parsedSchema.meshPaths.length;
             this.resourceCount += parsedSchema.texturePaths.length;
 
-            this.loadAsyncResources(schema.programs, this.loadProgram);
+            this.loadAsyncResources(parsedSchema.shaderPaths, this.loadShader);
             this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
             this.loadAsyncResources(parsedSchema.texturePaths,
                 this.loadTexture);
@@ -103,6 +137,20 @@ define([
             _.each(schema.tree, function (node) {
                 this.instantiateNode(this.sources.tree, node);
             }, this);
+        },
+
+        getDotChain: function (path, source) {
+            if (_.isString(path)) {
+                path = path.split('.');
+            }
+
+            var property = _.first(path);
+
+            if (path.length === 1) {
+                return source[property];
+            } else if (property in source) {
+                return this.getDotChain(_.rest(path), source[property]);
+            }
         },
 
         parseNode: function (node) {
@@ -269,30 +317,11 @@ define([
             }
         },
 
-        loadProgram: function (options, name) {
-            this.sources.programs[name] = {
-                default: options.default || false,
-                shaders: {}
-            };
-
-            _.each(options.shaders, function (path, key) {
-
-                if (path.indexOf('SHADER') !== -1) {
-                    var splitPath = path.split('.');
-
-                    if (splitPath[1] in programConstants.PREDEFINED &&
-                            splitPath[2] in programConstants.PREDEFINED
-                            [splitPath[1]]) {
-                        path = this.config.paths.shaders + programConstants
-                            .PREDEFINED[splitPath[1]][splitPath[2]];
-                    }
-                }
-
-                loadFile(path, (function (source) {
-                    this.sources.programs[name].shaders[key] = source;
-                    this.resourceLoaded();
-                }).bind(this));
-            }, this);
+        loadShader: function (path) {
+            loadFile(path, (function (source) {
+                this.sources.shaders[path] = source;
+                this.resourceLoaded();
+            }).bind(this));
         },
 
         loadMesh: function (path) {

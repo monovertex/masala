@@ -1,44 +1,80 @@
 
 define([
-    'shading/render'
-], function (lightingRender) {
+    'shading/render',
+    'gl/canvas/constants'
+], function (lightingRender, constants) {
 
     return {
         render: function () {
-            var color;
+            var color,
+                context = this.context,
+                canvas = this.canvas,
+                rtt = this.rtt,
+                resources,
+                scene;
 
             this.resize();
-
-            this.context.clear(this.context.COLOR_BUFFER_BIT |
-                    this.context.DEPTH_BUFFER_BIT);
 
             if (!_.isUndefined(this.scene) &&
                     !_.isUndefined(this.scenes[this.scene.uid]) &&
                     !_.isUndefined(this.scenes[this.scene.uid].resources)) {
 
-                var resources = this.scenes[this.scene.uid].resources;
+                scene = this.scenes[this.scene.uid];
+
+                rtt.framebuffer.bind();
+
+                this.clear();
+
+                context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+
+                resources = scene.resources;
+
+                this.useProgram(resources.defaultProgram);
+                this.useCamera(resources.defaultCamera);
+
+                if (_.isFunction(scene.beforeFrame)) {
+                    scene.beforeFrame.call(this, resources);
+                }
 
                 color = resources.backgroundColor ||
                     this.config.backgroundColor;
-                this.context.clearColor(color.r, color.g, color.b, 1);
+                context.clearColor(color.r, color.g, color.b, 1);
 
-                this.context.uniform3f(
-                    this.context._currentProgram.getUniformLoc('ambientLight'),
+                context.uniform3f(
+                    context._currentProgram.getUniformLoc('ambientLight'),
                     false, resources.ambientLight.r, resources.ambientLight.g,
                     resources.ambientLight.b);
 
-                this.context._currentCamera.render(this.canvas, this.context);
+                context._currentCamera.render(this.canvas, context);
 
-                lightingRender(this.context, resources.lights);
+                lightingRender(context, resources.lights);
 
-                resources.tree.render(this.context, resources);
+                resources.tree.render(context, resources);
+
+                rtt.framebuffer.unbind();
+
+                this.clear();
+
+                // Render the RTT texture to the quad.
+                context.viewport(0, 0, canvas.width, canvas.height);
+
+                rtt.program.use();
+
+                rtt.texture.render(0);
+
+                rtt.mesh.render();
 
             } else {
                 color = this.config.backgroundColor;
-                this.context.clearColor(color.r, color.g, color.b, 1);
+                context.clearColor(color.r, color.g, color.b, 1);
 
                 console.log('loading');
             }
+        },
+
+        clear: function () {
+            this.context.clear(this.context.COLOR_BUFFER_BIT |
+                this.context.DEPTH_BUFFER_BIT);
         },
 
         resize: function () {
@@ -50,7 +86,7 @@ define([
                 canvas.width = canvas.clientWidth;
                 canvas.height = canvas.clientHeight;
 
-                context.viewport(0, 0, canvas.width, canvas.height);
+                this.resizeRTT();
             }
         }
     };

@@ -135,16 +135,18 @@ define([
         return { vertices: vertices, indices: indices };
     }
 
-    return function (source) {
-        if (_.isString(source)) {
-            return parseObj(source);
-        } else {
-            return {
-                vertices: _.map(source.vertices, function (vertex) {
-                    return new Vertex(vertex);
-                }),
-                indices: _.flatten(source.indices, true)
-            };
+    return {
+        parse: function (source) {
+            if (_.isString(source)) {
+                return parseObj(source);
+            } else {
+                return {
+                    vertices: _.map(source.vertices, function (vertex) {
+                        return new Vertex(vertex);
+                    }),
+                    indices: _.flatten(source.indices, true)
+                };
+            }
         }
     };
 });

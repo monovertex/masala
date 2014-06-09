@@ -7,16 +7,17 @@ define([
     'geometry/mesh/parse'
 ], function (geometryConstants, programConstants, Class, parse) {
 
-    return Class.extend({
+    return Class.extend(_.extend({
 
-        initialize: function (context, source, programs) {
+        initialize: function (context, source) {
             this.context = context;
-            this.programs = programs;
 
             var rawData = this.parse(source),
                 vbo = context.createBuffer(),
                 ibo = context.createBuffer(),
                 coordsList, flat, i, maxCoord = 0;
+
+            _.bindAll(this, 'linkAttributes');
 
             coordsList = _.flatten(_.reduce(
                 rawData.vertices,
@@ -36,7 +37,6 @@ define([
             ), true);
 
             context.bindBuffer(context.ARRAY_BUFFER, vbo);
-            _.each(programs, this.linkAttributes, this);
 
             context.bufferData(
                 context.ARRAY_BUFFER,
@@ -57,8 +57,6 @@ define([
             this.vbo = vbo;
             this.ibo = ibo;
             this.indexCount = rawData.indices.length;
-
-            _.bindAll(this, 'linkAttributes');
         },
 
         render: function () {
@@ -66,7 +64,7 @@ define([
 
             context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
 
-            _.each(this.programs, this.linkAttributes, this);
+            this.linkAttributes();
 
             context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
 
@@ -74,10 +72,9 @@ define([
                 context.UNSIGNED_SHORT, 0);
         },
 
-        parse: parse,
-
-        linkAttributes: function (program) {
+        linkAttributes: function () {
             var context = this.context,
+                program = context._currentProgram,
                 VERTEX = geometryConstants.VERTEX,
                 attributePosition = program.getAttribLoc(
                     programConstants.ATTRIBUTES.VERTEX_POSITION),
@@ -86,7 +83,7 @@ define([
                 attributeTexcoords = program.getAttribLoc(
                     programConstants.ATTRIBUTES.VERTEX_TEX_COORDS);
 
-            if (attributePosition >= 0) {
+            if (attributePosition > 0 || attributePosition === 0) {
                 context.vertexAttribPointer(
                     attributePosition,
                     VERTEX.ITEM_SIZE.POSITION,
@@ -95,7 +92,7 @@ define([
                 );
             }
 
-            if (attributeNormal >= 0) {
+            if (attributeNormal > 0 || attributeNormal === 0) {
                 context.vertexAttribPointer(
                     attributeNormal,
                     VERTEX.ITEM_SIZE.NORMAL,
@@ -104,7 +101,7 @@ define([
                 );
             }
 
-            if (attributeTexcoords >= 0) {
+            if (attributeTexcoords > 0 || attributeTexcoords === 0) {
                 context.vertexAttribPointer(
                     attributeTexcoords,
                     VERTEX.ITEM_SIZE.TEX_COORD,
@@ -114,6 +111,6 @@ define([
             }
         }
 
-    });
+    }, parse));
 
 });

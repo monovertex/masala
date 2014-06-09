@@ -71,25 +71,51 @@ define([
                 context[filterMag]
             );
 
+            // Buffer data.
+            if (_.isNull(options.source) ||
+                    options.source instanceof Float32Array) {
+                context.texImage2D(
+                    context.TEXTURE_2D,
+                    0,
+                    context[options.format] || context.RGBA,
+                    options.width,
+                    options.height,
+                    0,
+                    context[options.format] || context.RGBA,
+                    context[options.type] || context.UNSIGNED_BYTE,
+                    options.source
+                );
+
+                this.width = options.width;
+                this.height = options.height;
+
+            } else if (options.source instanceof Image) {
+                context.texImage2D(
+                    context.TEXTURE_2D,
+                    0,
+                    context[options.format] || context.RGBA,
+                    context[options.format] || context.RGBA,
+                    context[options.type] || context.UNSIGNED_BYTE,
+                    options.source
+                );
+            }
+
             if (filterMin.indexOf('MIPMAP') !== -1) {
                 context.generateMipmap(context.TEXTURE_2D);
             }
 
-            // Buffer data.
-            context.texImage2D(
-                context.TEXTURE_2D,
-                0,
-                context[options.format] || context.RGBA,
-                context[options.format] || context.RGBA,
-                context[options.type] || context.UNSIGNED_BYTE,
-                options.source
-            );
-
-            // Clear up binding point.
-            context.bindTexture(context.TEXTURE_2D, null);
-
             this.texture = texture;
             this.context = context;
+
+            this.unbind();
+        },
+
+        bind: function () {
+            this.context.bindTexture(this.context.TEXTURE_2D, this.texture);
+        },
+
+        unbind: function () {
+            this.context.bindTexture(this.context.TEXTURE_2D, null);
         },
 
         render: function (unit, alpha) {
@@ -98,7 +124,7 @@ define([
                 uniformName = (alpha ? 'alphaTexture' : 'colorTexture');
 
             context.activeTexture(context.TEXTURE0 + unit);
-            context.bindTexture(context.TEXTURE_2D, this.texture);
+            this.bind();
             context.uniform1i(program.getUniformLoc(uniformName), unit);
         }
 

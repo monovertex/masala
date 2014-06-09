@@ -30,24 +30,28 @@ define([
                         cameraOptions: _.clone(sources.cameraOptions),
                         actorOptions: _.clone(sources.actorOptions),
                         lightOptions: _.clone(sources.lightOptions),
-                    };
 
+                        defaultCamera: sources.defaultCamera
+                    };
 
                 // Programs.
                 _.each(sources.programs, function (source, key) {
-                    resources.programs[key] = new Program(context,
-                        source.shaders);
-
-                    if (source.default) {
-                        resources.programs[key].use();
-                    }
+                    resources.programs[key] = new Program(
+                        context,
+                        _.reduce(source, function (result, path, key) {
+                            result[key] = sources.shaders[path];
+                            return result;
+                        }, {})
+                    );
                 }, this);
+
+                resources.defaultProgram =
+                    resources.programs[sources.defaultProgram];
 
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
-                    resources.allMeshes[key] = new Mesh(context, source,
-                        resources.programs);
+                    resources.allMeshes[key] = new Mesh(context, source);
                 }, this);
 
                 _.each(sources.meshNames, function (path, name) {
@@ -66,15 +70,9 @@ define([
                     }
                 }, this);
 
-                sources.defaultCamera.use(context);
-
                 resources.tree = this.initializeNode(sources.tree, resources);
 
                 this.scenes[scene.uid].resources = resources;
-
-                if (!_.isUndefined(this.sceneInitialize)) {
-                    this.sceneInitialize.call(this, resources);
-                }
 
             } else {
                 this.listen(scene, 'loaded', this.initializeScene);
