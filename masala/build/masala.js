@@ -137,6 +137,10 @@ modules['gl/program/constants'] = {
             BLUR: {
                 vertex: 'postprocessing/common.vert',
                 fragment: 'postprocessing/blur.frag'
+            },
+            INVERT: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/invert.frag'
             }
         }
     },
@@ -1653,7 +1657,8 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 scene,
                 source,
                 target,
-                aux;
+                aux,
+                xStep, yStep;
 
             this.resize();
 
@@ -1715,6 +1720,8 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 if (this.postprocessingEnabled) {
                     source = this.postprocessing;
                     target = this.rtt;
+                    xStep = 1.0 / canvas.width;
+                    yStep = 1.0 / canvas.height;
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
@@ -1726,6 +1733,11 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                         this.clear();
 
                         this.useProgram(program);
+
+                        context.uniform1f(program.getUniformLoc('xStep'),
+                            xStep);
+                        context.uniform1f(program.getUniformLoc('yStep'),
+                            yStep);
 
                         source.texture.render(0);
 

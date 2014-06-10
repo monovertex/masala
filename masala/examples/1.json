@@ -3,10 +3,11 @@
     "programs": {
         "lighting": "SHADER.LIGHTING.PHONG",
         "basic": "SHADER.BASIC",
-        "blur": "SHADER.POSTPROCESSING.BLUR"
+        "blur": "SHADER.POSTPROCESSING.BLUR",
+        "invert": "SHADER.POSTPROCESSING.INVERT"
     },
     "defaultProgram": "lighting",
-    "postprocessing": ["blur"],
+    "postprocessing": ["invert", "blur"],
     "meshes": {
         "sphere": "/masala/meshes/sphere.obj",
         "cube": "/masala/meshes/cube.obj"

@@ -19,6 +19,10 @@ define({
             BLUR: {
                 vertex: 'postprocessing/common.vert',
                 fragment: 'postprocessing/blur.frag'
+            },
+            INVERT: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/invert.frag'
             }
         }
     },
