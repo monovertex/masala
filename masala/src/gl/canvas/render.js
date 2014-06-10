@@ -40,7 +40,8 @@ define([
 
                 if (this.rttEnabled) {
                     rtt.framebuffer.bind();
-                    context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+                    context.viewport(0, 0, rtt.texture.width,
+                        rtt.texture.height);
                 } else {
                     context.viewport(0, 0, canvas.width, canvas.height);
                 }
@@ -68,10 +69,6 @@ define([
                 lightingRender(context, resources.lights);
 
                 resources.tree.render(context, resources);
-
-                if (this.rttEnabled) {
-                    context.viewport(0, 0, canvas.width, canvas.height);
-                }
 
                 // Postprocessing.
                 if (this.postprocessingEnabled) {
@@ -104,6 +101,8 @@ define([
 
                 // Render the RTT texture to the quad.
                 if (this.rttEnabled) {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+
                     rtt.framebuffer.unbind();
 
                     this.clear();

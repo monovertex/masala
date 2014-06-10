@@ -134,13 +134,25 @@ modules['gl/program/constants'] = {
             }
         },
         POSTPROCESSING: {
-            BLUR: {
+            GAUSSIAN_BLUR_X: {
                 vertex: 'postprocessing/common.vert',
-                fragment: 'postprocessing/blur.frag'
+                fragment: 'postprocessing/gaussian-blur-x.frag'
+            },
+            GAUSSIAN_BLUR_Y: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/gaussian-blur-y.frag'
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
                 fragment: 'postprocessing/invert.frag'
+            },
+            GRAYSCALE: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/grayscale.frag'
+            },
+            BLOOM: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/bloom.frag'
             }
         }
     },
@@ -1683,7 +1695,8 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                 if (this.rttEnabled) {
                     rtt.framebuffer.bind();
-                    context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+                    context.viewport(0, 0, rtt.texture.width,
+                        rtt.texture.height);
                 } else {
                     context.viewport(0, 0, canvas.width, canvas.height);
                 }
@@ -1711,10 +1724,6 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 lightingRender(context, resources.lights);
 
                 resources.tree.render(context, resources);
-
-                if (this.rttEnabled) {
-                    context.viewport(0, 0, canvas.width, canvas.height);
-                }
 
                 // Postprocessing.
                 if (this.postprocessingEnabled) {
@@ -1747,6 +1756,8 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                 // Render the RTT texture to the quad.
                 if (this.rttEnabled) {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+
                     rtt.framebuffer.unbind();
 
                     this.clear();
@@ -1931,8 +1942,8 @@ modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) 
                     this.postprocessingEnabled) {
                 var context = this.context,
                     postprocessing = this.postprocessing,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+                    width = this.canvas.width * this.config.multisampling,
+                    height = this.canvas.height * this.config.multisampling;
 
                 if (!_.isUndefined(postprocessing.texture)) {
                     delete postprocessing.texture;

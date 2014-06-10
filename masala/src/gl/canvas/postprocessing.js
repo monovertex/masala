@@ -26,8 +26,8 @@ define([
                     this.postprocessingEnabled) {
                 var context = this.context,
                     postprocessing = this.postprocessing,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+                    width = this.canvas.width * this.config.multisampling,
+                    height = this.canvas.height * this.config.multisampling;
 
                 if (!_.isUndefined(postprocessing.texture)) {
                     delete postprocessing.texture;
