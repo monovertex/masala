@@ -2,15 +2,10 @@
     "ambientLight": { "r": 0.1, "g": 0.1, "b": 0.1 },
     "programs": {
         "lighting": "SHADER.LIGHTING.PHONG",
-        "basic": "SHADER.BASIC",
-        "blur-x": "SHADER.POSTPROCESSING.GAUSSIAN_BLUR_X",
-        "blur-y": "SHADER.POSTPROCESSING.GAUSSIAN_BLUR_Y",
-        "invert": "SHADER.POSTPROCESSING.INVERT",
-        "grayscale": "SHADER.POSTPROCESSING.GRAYSCALE",
-        "bloom": "SHADER.POSTPROCESSING.BLOOM"
+        "basic": "SHADER.BASIC"
     },
     "defaultProgram": "lighting",
-    "postprocessing": ["invert"],
+    "postprocessing": ["SHADER.POSTPROCESSING.INVERT"],
     "meshes": {
         "sphere": "/masala/meshes/sphere.obj",
         "cube": "/masala/meshes/cube.obj"

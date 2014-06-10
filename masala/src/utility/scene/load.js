@@ -59,10 +59,15 @@ define([
             };
             this.parsedSchema = parsedSchema;
 
+            // Postprocessing.
+            _.each(schema.postprocessing, function (name) {
+                if (name.indexOf('SHADER') === 0) {
+                    schema.programs[name] = name;
+                }
+            });
+
             // Shaders.
             _.each(schema.programs, function (options, name) {
-                var pathChain;
-
                 if (_.isString(options) && options.indexOf('SHADER') === 0) {
                     options = options.replace('SHADER', 'PREDEFINED');
                     options = this.getDotChain(options, programConstants);
@@ -84,6 +89,8 @@ define([
                     });
                 }
             }, this);
+
+
 
             // Meshes.
             _.each(schema.meshes, function (path) {
