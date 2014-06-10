@@ -16,13 +16,27 @@ define({
             }
         },
         POSTPROCESSING: {
-            GAUSSIAN_BLUR_X: {
-                vertex: 'postprocessing/common.vert',
-                fragment: 'postprocessing/gaussian-blur-x.frag'
-            },
-            GAUSSIAN_BLUR_Y: {
-                vertex: 'postprocessing/common.vert',
-                fragment: 'postprocessing/gaussian-blur-y.frag'
+            BLUR: {
+                GAUSSIAN: {
+                    X: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/gaussian/x.frag'
+                    },
+                    Y: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/gaussian/y.frag'
+                    }
+                },
+                MOTION: {
+                    X: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/motion/x.frag'
+                    },
+                    Y: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/motion/y.frag'
+                    }
+                }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',

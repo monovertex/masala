@@ -16,9 +16,11 @@ define([
             };
 
             this.rotationMouseControl = {
-                'x': constants.ROTATIONS.NONE,
-                'y': constants.ROTATIONS.NONE
+                x: constants.ROTATIONS.NONE,
+                y: constants.ROTATIONS.NONE
             };
+
+            this.mouseDisplacement = { x: 0, y: 0 };
 
             this.rotationAngle = { x: 0, y: 0, z: 0 };
 
@@ -71,16 +73,24 @@ define([
         cursorMove: function (cursor, eventName, data) {
             var angles = {};
 
-            angles[this.rotationMouseControl.x] = this.rotationSensitivity.x *
-                constants.MOUSE_FACTOR * data.x;
-            angles[this.rotationMouseControl.y] = this.rotationSensitivity.y *
-                constants.MOUSE_FACTOR * data.y;
+            angles[this.rotationMouseControl.x] = constants.MOUSE_FACTOR *
+                this.rotationSensitivity[this.rotationMouseControl.x] * data.x;
+            angles[this.rotationMouseControl.y] = constants.MOUSE_FACTOR *
+                this.rotationSensitivity[this.rotationMouseControl.y] * data.y;
+
+            this.mouseDisplacement.x += angles[this.rotationMouseControl.x];
+            this.mouseDisplacement.y += angles[this.rotationMouseControl.y];
 
             this.rotate(angles, true);
         },
 
         updateRotation: function (interval) {
             this.rotate(interval);
+        },
+
+        resetMouseDisplacement: function () {
+            this.mouseDisplacement.x = 0;
+            this.mouseDisplacement.y = 0;
         },
 
         getAngleIncrease: function (axis, angleData, exact) {

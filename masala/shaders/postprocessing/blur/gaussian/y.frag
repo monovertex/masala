@@ -5,7 +5,6 @@ varying vec2 texCoords;
 uniform sampler2D colorTexture;
 uniform float yStep;
 
-
 float filter[9];
 
 vec3 blur() {

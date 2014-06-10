@@ -134,13 +134,27 @@ modules['gl/program/constants'] = {
             }
         },
         POSTPROCESSING: {
-            GAUSSIAN_BLUR_X: {
-                vertex: 'postprocessing/common.vert',
-                fragment: 'postprocessing/gaussian-blur-x.frag'
-            },
-            GAUSSIAN_BLUR_Y: {
-                vertex: 'postprocessing/common.vert',
-                fragment: 'postprocessing/gaussian-blur-y.frag'
+            BLUR: {
+                GAUSSIAN: {
+                    X: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/gaussian/x.frag'
+                    },
+                    Y: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/gaussian/y.frag'
+                    }
+                },
+                MOTION: {
+                    X: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/motion/x.frag'
+                    },
+                    Y: {
+                        vertex: 'postprocessing/common.vert',
+                        fragment: 'postprocessing/blur/motion/y.frag'
+                    }
+                }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
@@ -996,9 +1010,11 @@ modules['interaction/actor/rotation'] = (function (constants) {
             };
 
             this.rotationMouseControl = {
-                'x': constants.ROTATIONS.NONE,
-                'y': constants.ROTATIONS.NONE
+                x: constants.ROTATIONS.NONE,
+                y: constants.ROTATIONS.NONE
             };
+
+            this.mouseDisplacement = { x: 0, y: 0 };
 
             this.rotationAngle = { x: 0, y: 0, z: 0 };
 
@@ -1051,16 +1067,24 @@ modules['interaction/actor/rotation'] = (function (constants) {
         cursorMove: function (cursor, eventName, data) {
             var angles = {};
 
-            angles[this.rotationMouseControl.x] = this.rotationSensitivity.x *
-                constants.MOUSE_FACTOR * data.x;
-            angles[this.rotationMouseControl.y] = this.rotationSensitivity.y *
-                constants.MOUSE_FACTOR * data.y;
+            angles[this.rotationMouseControl.x] = constants.MOUSE_FACTOR *
+                this.rotationSensitivity[this.rotationMouseControl.x] * data.x;
+            angles[this.rotationMouseControl.y] = constants.MOUSE_FACTOR *
+                this.rotationSensitivity[this.rotationMouseControl.y] * data.y;
+
+            this.mouseDisplacement.x += angles[this.rotationMouseControl.x];
+            this.mouseDisplacement.y += angles[this.rotationMouseControl.y];
 
             this.rotate(angles, true);
         },
 
         updateRotation: function (interval) {
             this.rotate(interval);
+        },
+
+        resetMouseDisplacement: function () {
+            this.mouseDisplacement.x = 0;
+            this.mouseDisplacement.y = 0;
         },
 
         getAngleIncrease: function (axis, angleData, exact) {
@@ -1670,7 +1694,7 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 source,
                 target,
                 aux,
-                xStep, yStep;
+                xStep, yStep, xSpeed, ySpeed;
 
             this.resize();
 
@@ -1731,6 +1755,12 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                     target = this.rtt;
                     xStep = 1.0 / canvas.width;
                     yStep = 1.0 / canvas.height;
+                    xSpeed = Math.ceil(Math.abs(context._currentCamera
+                        .mouseDisplacement.x) * 300);
+                    ySpeed = Math.ceil(Math.abs(context._currentCamera
+                        .mouseDisplacement.y) * 300);
+
+                    context._currentCamera.resetMouseDisplacement();
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
@@ -1747,6 +1777,11 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                             xStep);
                         context.uniform1f(program.getUniformLoc('yStep'),
                             yStep);
+
+                        context.uniform1i(program.getUniformLoc('xSpeed'),
+                            xSpeed);
+                        context.uniform1i(program.getUniformLoc('ySpeed'),
+                            ySpeed);
 
                         source.texture.render(0);
 

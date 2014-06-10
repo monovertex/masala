@@ -15,7 +15,7 @@ define([
                 source,
                 target,
                 aux,
-                xStep, yStep;
+                xStep, yStep, xSpeed, ySpeed;
 
             this.resize();
 
@@ -76,6 +76,12 @@ define([
                     target = this.rtt;
                     xStep = 1.0 / canvas.width;
                     yStep = 1.0 / canvas.height;
+                    xSpeed = Math.ceil(Math.abs(context._currentCamera
+                        .mouseDisplacement.x) * 300);
+                    ySpeed = Math.ceil(Math.abs(context._currentCamera
+                        .mouseDisplacement.y) * 300);
+
+                    context._currentCamera.resetMouseDisplacement();
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
@@ -92,6 +98,11 @@ define([
                             xStep);
                         context.uniform1f(program.getUniformLoc('yStep'),
                             yStep);
+
+                        context.uniform1i(program.getUniformLoc('xSpeed'),
+                            xSpeed);
+                        context.uniform1i(program.getUniformLoc('ySpeed'),
+                            ySpeed);
 
                         source.texture.render(0);
 
