@@ -1476,6 +1476,18 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                 resources.defaultProgram =
                     resources.programs[sources.defaultProgram];
 
+                if (!_.isUndefined(sources.postprocessing) &&
+                        _.isArray(sources.postprocessing)) {
+                    resources.postprocessing = [];
+
+                    _.each(sources.postprocessing, function (name) {
+                        if (name in resources.programs) {
+                            resources.postprocessing.push(
+                                resources.programs[name]);
+                        }
+                    });
+                }
+
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
@@ -1583,6 +1595,10 @@ modules['shading/render'] = (function () {
 modules['gl/canvas/constants'] = (function (Vertex) {
 
     return  {
+        MULTISAMPLING: {
+            OPTIONS: [1, 2, 4, 8],
+            NONE: 1
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -1632,9 +1648,12 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
             var color,
                 context = this.context,
                 canvas = this.canvas,
-                rtt = this.rtt,
+                rtt,
                 resources,
-                scene;
+                scene,
+                source,
+                target,
+                aux;
 
             this.resize();
 
@@ -1643,14 +1662,28 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                     !_.isUndefined(this.scenes[this.scene.uid].resources)) {
 
                 scene = this.scenes[this.scene.uid];
+                resources = scene.resources;
 
-                rtt.framebuffer.bind();
+                if (!_.isUndefined(resources.postprocessing)) {
+                    this.initializePostprocessing();
+
+                    if (!this.rttEnabled) {
+                        this.initializeRTT();
+                    }
+                } else {
+                    this.postprocessingEnabled = false;
+                }
+
+                rtt = this.rtt;
+
+                if (this.rttEnabled) {
+                    rtt.framebuffer.bind();
+                    context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+                } else {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+                }
 
                 this.clear();
-
-                context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
-
-                resources = scene.resources;
 
                 this.useProgram(resources.defaultProgram);
                 this.useCamera(resources.defaultCamera);
@@ -1674,19 +1707,48 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                 resources.tree.render(context, resources);
 
-                rtt.framebuffer.unbind();
+                if (this.rttEnabled) {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+                }
 
-                this.clear();
+                // Postprocessing.
+                if (this.postprocessingEnabled) {
+                    source = this.postprocessing;
+                    target = this.rtt;
+
+                    _.each(resources.postprocessing, function (program) {
+                        aux = source;
+                        source = target;
+                        target = aux;
+
+                        target.framebuffer.bind();
+
+                        this.clear();
+
+                        this.useProgram(program);
+
+                        source.texture.render(0);
+
+                        rtt.mesh.render();
+                    }, this);
+                }
 
                 // Render the RTT texture to the quad.
-                context.viewport(0, 0, canvas.width, canvas.height);
+                if (this.rttEnabled) {
+                    rtt.framebuffer.unbind();
 
-                rtt.program.use();
+                    this.clear();
 
-                rtt.texture.render(0);
+                    rtt.program.use();
 
-                rtt.mesh.render();
+                    if (this.postprocessingEnabled) {
+                        target.texture.render(0);
+                    } else {
+                        rtt.texture.render(0);
+                    }
 
+                    rtt.mesh.render();
+                }
             } else {
                 color = this.config.backgroundColor;
                 context.clearColor(color.r, color.g, color.b, 1);
@@ -1710,6 +1772,7 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 canvas.height = canvas.clientHeight;
 
                 this.resizeRTT();
+                this.resizePostprocessing();
             }
         }
     };
@@ -1769,6 +1832,117 @@ modules['gl/framebuffer'] = (function (Class) {
 }) (modules['utility/class']);
 
 
+modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh) {
+
+    return {
+        initializeRTT: function () {
+            if (_.isUndefined(this.rtt)) {
+                var context = this.context,
+                    rtt = {
+                        framebuffer: new Framebuffer(context),
+                        program: new Program(context,
+                            constants.RTT.PROGRAM.shaders)
+                    };
+
+                this.rtt = rtt;
+
+                rtt.mesh = new Mesh(context, constants.RTT.MESH);
+            }
+
+            this.rttEnabled = true;
+            this.resizeRTT();
+        },
+
+        resizeRTT: function () {
+            if (!_.isUndefined(this.rtt) && this.rttEnabled) {
+                var context = this.context,
+                    rtt = this.rtt,
+                    width = this.canvas.width * this.config.multisampling,
+                    height = this.canvas.height * this.config.multisampling;
+
+                if (!_.isUndefined(rtt.texture)) {
+                    delete rtt.texture;
+                }
+
+                rtt.texture = new Texture(
+                    _.extend({
+                        source: null,
+                        width: width,
+                        height: height
+                    }, constants.RTT.TEXTURE),
+                    context
+                );
+
+                rtt.framebuffer.attachColor(rtt.texture);
+
+                if (!_.isUndefined(rtt.depthbuffer)) {
+                    delete rtt.depthbuffer;
+                }
+
+                rtt.depthbuffer = context.createRenderbuffer();
+
+                context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
+                context.renderbufferStorage(
+                    context.RENDERBUFFER,
+                    context.DEPTH_COMPONENT16,
+                    width,
+                    height
+                );
+
+                rtt.framebuffer.attachDepth(rtt.depthbuffer);
+            }
+        }
+    };
+
+}) (modules['gl/framebuffer'],modules['gl/program'],modules['gl/canvas/constants'],modules['gl/texture'],modules['geometry/mesh']);
+
+
+modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) {
+
+    return {
+        initializePostprocessing: function () {
+            if (_.isUndefined(this.postprocessing)) {
+                var context = this.context,
+                    postprocessing = {
+                        framebuffer: new Framebuffer(context)
+                    };
+
+                this.postprocessing = postprocessing;
+            }
+
+            this.postprocessingEnabled = true;
+            this.resizePostprocessing();
+        },
+
+        resizePostprocessing: function() {
+            if (!_.isUndefined(this.postprocessing) &&
+                    this.postprocessingEnabled) {
+                var context = this.context,
+                    postprocessing = this.postprocessing,
+                    width = this.canvas.width,
+                    height = this.canvas.height;
+
+                if (!_.isUndefined(postprocessing.texture)) {
+                    delete postprocessing.texture;
+                }
+
+                postprocessing.texture = new Texture(
+                    _.extend({
+                        source: null,
+                        width: width,
+                        height: height
+                    }, constants.RTT.TEXTURE),
+                    context
+                );
+
+                postprocessing.framebuffer.attachColor(postprocessing.texture);
+            }
+        }
+    };
+
+}) (modules['gl/framebuffer'],modules['gl/canvas/constants'],modules['gl/texture']);
+
+
 modules['utility/debug-output'] = (function () {
 
     return function (functionName, args) {
@@ -1792,7 +1966,7 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,Texture,constants,Framebuffer,Program,Mesh,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
@@ -1800,6 +1974,11 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,Texture,cons
             var context;
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
+
+            if (constants.MULTISAMPLING.OPTIONS
+                    .indexOf(this.config.multisampling) === -1) {
+                this.config.multisampling = constants.MULTISAMPLING.NONE;
+            }
 
             this.scenes = {};
 
@@ -1816,65 +1995,15 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,Texture,cons
 
             this.context = context;
 
-            this.initializeRTT();
+            if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
+                this.initializeRTT();
+            }
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
             this.canvas.addEventListener('click', function () {
                 cursor.requestLock();
             });
-        },
-
-        initializeRTT: function () {
-            var context = this.context,
-                rtt = {
-                    framebuffer: new Framebuffer(context),
-                    program: new Program(context, constants.RTT.PROGRAM.shaders)
-                };
-
-            this.rtt = rtt;
-
-            rtt.mesh = new Mesh(context, constants.RTT.MESH);
-
-            this.resizeRTT();
-        },
-
-        resizeRTT: function () {
-            var context = this.context,
-                rtt = this.rtt,
-                width = this.canvas.width * 2,
-                height = this.canvas.height * 2;
-
-            if (!_.isUndefined(rtt.texture)) {
-                delete rtt.texture;
-            }
-
-            rtt.texture = new Texture(
-                _.extend({
-                    source: null,
-                    width: width,
-                    height: height
-                }, constants.RTT.TEXTURE),
-                context
-            );
-
-            rtt.framebuffer.attachColor(rtt.texture);
-
-            if (!_.isUndefined(rtt.depthbuffer)) {
-                delete rtt.depthbuffer;
-            }
-
-            rtt.depthbuffer = context.createRenderbuffer();
-
-            context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
-            context.renderbufferStorage(
-                context.RENDERBUFFER,
-                context.DEPTH_COMPONENT16,
-                width,
-                height
-            );
-
-            rtt.framebuffer.attachDepth(rtt.depthbuffer);
         },
 
         setScene: function (scene, beforeFrame) {
@@ -1901,9 +2030,9 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,Texture,cons
             program.use(this.context);
         }
 
-    }, initialize, render));
+    }, initialize, render, rtt, postprocessing));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/texture'],modules['gl/canvas/constants'],modules['gl/framebuffer'],modules['gl/program'],modules['geometry/mesh'],modules['utility/debug-output'],modules['interaction/cursor']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -2302,6 +2431,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 programs: schema.programs,
                 shaders: {},
                 defaultProgram: schema.defaultProgram,
+                postprocessing: schema.postprocessing,
 
                 actorOptions: schema.actors,
 

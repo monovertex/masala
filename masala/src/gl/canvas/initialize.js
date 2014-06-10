@@ -48,6 +48,18 @@ define([
                 resources.defaultProgram =
                     resources.programs[sources.defaultProgram];
 
+                if (!_.isUndefined(sources.postprocessing) &&
+                        _.isArray(sources.postprocessing)) {
+                    resources.postprocessing = [];
+
+                    _.each(sources.postprocessing, function (name) {
+                        if (name in resources.programs) {
+                            resources.postprocessing.push(
+                                resources.programs[name]);
+                        }
+                    });
+                }
+
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {

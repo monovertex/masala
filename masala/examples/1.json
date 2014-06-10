@@ -6,6 +6,7 @@
         "blur": "SHADER.POSTPROCESSING.BLUR"
     },
     "defaultProgram": "lighting",
+    "postprocessing": ["blur"],
     "meshes": {
         "sphere": "/masala/meshes/sphere.obj",
         "cube": "/masala/meshes/cube.obj"

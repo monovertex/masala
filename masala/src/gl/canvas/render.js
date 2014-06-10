@@ -9,9 +9,12 @@ define([
             var color,
                 context = this.context,
                 canvas = this.canvas,
-                rtt = this.rtt,
+                rtt,
                 resources,
-                scene;
+                scene,
+                source,
+                target,
+                aux;
 
             this.resize();
 
@@ -20,14 +23,28 @@ define([
                     !_.isUndefined(this.scenes[this.scene.uid].resources)) {
 
                 scene = this.scenes[this.scene.uid];
+                resources = scene.resources;
 
-                rtt.framebuffer.bind();
+                if (!_.isUndefined(resources.postprocessing)) {
+                    this.initializePostprocessing();
+
+                    if (!this.rttEnabled) {
+                        this.initializeRTT();
+                    }
+                } else {
+                    this.postprocessingEnabled = false;
+                }
+
+                rtt = this.rtt;
+
+                if (this.rttEnabled) {
+                    rtt.framebuffer.bind();
+                    context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
+                } else {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+                }
 
                 this.clear();
-
-                context.viewport(0, 0, rtt.texture.width, rtt.texture.height);
-
-                resources = scene.resources;
 
                 this.useProgram(resources.defaultProgram);
                 this.useCamera(resources.defaultCamera);
@@ -51,19 +68,48 @@ define([
 
                 resources.tree.render(context, resources);
 
-                rtt.framebuffer.unbind();
+                if (this.rttEnabled) {
+                    context.viewport(0, 0, canvas.width, canvas.height);
+                }
 
-                this.clear();
+                // Postprocessing.
+                if (this.postprocessingEnabled) {
+                    source = this.postprocessing;
+                    target = this.rtt;
+
+                    _.each(resources.postprocessing, function (program) {
+                        aux = source;
+                        source = target;
+                        target = aux;
+
+                        target.framebuffer.bind();
+
+                        this.clear();
+
+                        this.useProgram(program);
+
+                        source.texture.render(0);
+
+                        rtt.mesh.render();
+                    }, this);
+                }
 
                 // Render the RTT texture to the quad.
-                context.viewport(0, 0, canvas.width, canvas.height);
+                if (this.rttEnabled) {
+                    rtt.framebuffer.unbind();
 
-                rtt.program.use();
+                    this.clear();
 
-                rtt.texture.render(0);
+                    rtt.program.use();
 
-                rtt.mesh.render();
+                    if (this.postprocessingEnabled) {
+                        target.texture.render(0);
+                    } else {
+                        rtt.texture.render(0);
+                    }
 
+                    rtt.mesh.render();
+                }
             } else {
                 color = this.config.backgroundColor;
                 context.clearColor(color.r, color.g, color.b, 1);
@@ -87,6 +133,7 @@ define([
                 canvas.height = canvas.clientHeight;
 
                 this.resizeRTT();
+                this.resizePostprocessing();
             }
         }
     };

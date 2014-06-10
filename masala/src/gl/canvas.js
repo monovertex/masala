@@ -6,18 +6,15 @@ define([
 
     'gl/canvas/initialize',
     'gl/canvas/render',
-    'gl/texture',
     'gl/canvas/constants',
-    'gl/framebuffer',
-    'gl/program',
-
-    'geometry/mesh',
+    'gl/canvas/rtt',
+    'gl/canvas/postprocessing',
 
     'utility/debug-output',
 
     'interaction/cursor'
-], function (namespace, Class, initialize, render, Texture, constants,
-        Framebuffer, Program, Mesh, debugOutput, cursor) {
+], function (namespace, Class, initialize, render, constants, rtt,
+        postprocessing, debugOutput, cursor) {
 
     return Class.extend(_.extend({
 
@@ -25,6 +22,11 @@ define([
             var context;
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
+
+            if (constants.MULTISAMPLING.OPTIONS
+                    .indexOf(this.config.multisampling) === -1) {
+                this.config.multisampling = constants.MULTISAMPLING.NONE;
+            }
 
             this.scenes = {};
 
@@ -41,65 +43,15 @@ define([
 
             this.context = context;
 
-            this.initializeRTT();
+            if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
+                this.initializeRTT();
+            }
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
             this.canvas.addEventListener('click', function () {
                 cursor.requestLock();
             });
-        },
-
-        initializeRTT: function () {
-            var context = this.context,
-                rtt = {
-                    framebuffer: new Framebuffer(context),
-                    program: new Program(context, constants.RTT.PROGRAM.shaders)
-                };
-
-            this.rtt = rtt;
-
-            rtt.mesh = new Mesh(context, constants.RTT.MESH);
-
-            this.resizeRTT();
-        },
-
-        resizeRTT: function () {
-            var context = this.context,
-                rtt = this.rtt,
-                width = this.canvas.width * 2,
-                height = this.canvas.height * 2;
-
-            if (!_.isUndefined(rtt.texture)) {
-                delete rtt.texture;
-            }
-
-            rtt.texture = new Texture(
-                _.extend({
-                    source: null,
-                    width: width,
-                    height: height
-                }, constants.RTT.TEXTURE),
-                context
-            );
-
-            rtt.framebuffer.attachColor(rtt.texture);
-
-            if (!_.isUndefined(rtt.depthbuffer)) {
-                delete rtt.depthbuffer;
-            }
-
-            rtt.depthbuffer = context.createRenderbuffer();
-
-            context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
-            context.renderbufferStorage(
-                context.RENDERBUFFER,
-                context.DEPTH_COMPONENT16,
-                width,
-                height
-            );
-
-            rtt.framebuffer.attachDepth(rtt.depthbuffer);
         },
 
         setScene: function (scene, beforeFrame) {
@@ -126,6 +78,6 @@ define([
             program.use(this.context);
         }
 
-    }, initialize, render));
+    }, initialize, render, rtt, postprocessing));
 
 });

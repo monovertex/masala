@@ -3,12 +3,9 @@
 var scene = new Masala.Scene('/masala/examples/1.json'),
     canvasLeft = new Masala.Canvas(
         document.getElementById('canvas-left'),
-        { multisampling: 4 }
-    ),
-    canvasRight = new Masala.Canvas(
-        document.getElementById('canvas-right'),
         { multisampling: 2 }
-    );
+    ),
+    canvasRight = new Masala.Canvas(document.getElementById('canvas-right'));
 
 canvasLeft.setScene(scene);
 canvasRight.setScene(

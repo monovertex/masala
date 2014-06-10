@@ -4,6 +4,10 @@ define([
 ], function (Vertex) {
 
     return  {
+        MULTISAMPLING: {
+            OPTIONS: [1, 2, 4, 8],
+            NONE: 1
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',

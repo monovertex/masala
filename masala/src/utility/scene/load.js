@@ -31,6 +31,7 @@ define([
                 programs: schema.programs,
                 shaders: {},
                 defaultProgram: schema.defaultProgram,
+                postprocessing: schema.postprocessing,
 
                 actorOptions: schema.actors,
 
