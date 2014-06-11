@@ -70,7 +70,7 @@ function (Class) {
                             program.getUniformLoc('alphaTextured'), 1);
 
                         resources.allTextures[this.alphaTexture]
-                            .render(1, true);
+                            .render(1, 'alphaTexture');
                     } else {
                         context.uniform1i(
                             program.getUniformLoc('alphaTextured'), 0);

@@ -9,12 +9,13 @@ define([
     'gl/canvas/constants',
     'gl/canvas/rtt',
     'gl/canvas/postprocessing',
+    'gl/canvas/extensions',
 
     'utility/debug-output',
 
     'interaction/cursor'
 ], function (namespace, Class, initialize, render, constants, rtt,
-        postprocessing, debugOutput, cursor) {
+        postprocessing, extensions, debugOutput, cursor) {
 
     return Class.extend(_.extend({
 
@@ -42,6 +43,8 @@ define([
             context.enable(context.DEPTH_TEST);
 
             this.context = context;
+
+            this.initializeExtensions();
 
             if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
                 this.initializeRTT();
@@ -78,6 +81,6 @@ define([
             program.use(this.context);
         }
 
-    }, initialize, render, rtt, postprocessing));
+    }, initialize, render, rtt, postprocessing, extensions));
 
 });

@@ -11,7 +11,12 @@ define([
             if (_.isUndefined(this.postprocessing)) {
                 var context = this.context,
                     postprocessing = {
-                        framebuffer: new Framebuffer(context)
+                        primary: {
+                            fbo: new Framebuffer(context)
+                        },
+                        secondary: {
+                            fbo: new Framebuffer(context)
+                        }
                     };
 
                 this.postprocessing = postprocessing;
@@ -29,20 +34,22 @@ define([
                     width = this.canvas.width * this.config.multisampling,
                     height = this.canvas.height * this.config.multisampling;
 
-                if (!_.isUndefined(postprocessing.texture)) {
-                    delete postprocessing.texture;
-                }
+                _.each(postprocessing, function (obj) {
+                    if (!_.isUndefined(obj.colorTexture)) {
+                        delete obj.colorTexture;
+                    }
 
-                postprocessing.texture = new Texture(
-                    _.extend({
-                        source: null,
-                        width: width,
-                        height: height
-                    }, constants.RTT.TEXTURE),
-                    context
-                );
+                    obj.colorTexture = new Texture(
+                        _.extend({
+                            source: null,
+                            width: width,
+                            height: height
+                        }, constants.RTT.TEXTURE),
+                        context
+                    );
 
-                postprocessing.framebuffer.attachColor(postprocessing.texture);
+                    obj.fbo.attachColorTexture(obj.colorTexture);
+                }, this);
             }
         }
     };

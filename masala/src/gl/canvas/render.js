@@ -5,17 +5,12 @@ define([
 ], function (lightingRender, constants) {
 
     return {
-        render: function () {
+        render: function (initiator, eventName, eventData) {
             var color,
                 context = this.context,
                 canvas = this.canvas,
-                rtt,
-                resources,
-                scene,
-                source,
-                target,
-                aux,
-                xStep, yStep, xSpeed, ySpeed;
+                rtt, resources, scene, source, target, aux,
+                texelSize = {}, first, fps;
 
             this.resize();
 
@@ -39,9 +34,9 @@ define([
                 rtt = this.rtt;
 
                 if (this.rttEnabled) {
-                    rtt.framebuffer.bind();
-                    context.viewport(0, 0, rtt.texture.width,
-                        rtt.texture.height);
+                    rtt.fbo.bind();
+                    context.viewport(0, 0, rtt.colorTexture.width,
+                        rtt.colorTexture.height);
                 } else {
                     context.viewport(0, 0, canvas.width, canvas.height);
                 }
@@ -70,43 +65,53 @@ define([
 
                 resources.tree.render(context, resources);
 
+                if (this.rttEnabled) {
+                    rtt.fbo.unbind();
+                }
+
+
                 // Postprocessing.
                 if (this.postprocessingEnabled) {
-                    source = this.postprocessing;
-                    target = this.rtt;
-                    xStep = 1.0 / canvas.width;
-                    yStep = 1.0 / canvas.height;
-                    xSpeed = Math.ceil(Math.abs(context._currentCamera
-                        .mouseDisplacement.x) * 300);
-                    ySpeed = Math.ceil(Math.abs(context._currentCamera
-                        .mouseDisplacement.y) * 300);
+                    source = this.postprocessing.primary;
+                    target = this.postprocessing.secondary;
+                    first = true;
 
-                    context._currentCamera.resetMouseDisplacement();
+                    texelSize.x = 1.0 / canvas.width;
+                    texelSize.y = 1.0 / canvas.height;
+
+                    fps = 1.0 / eventData.interval;
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
                         source = target;
                         target = aux;
 
-                        target.framebuffer.bind();
+                        target.fbo.bind();
 
                         this.clear();
 
                         this.useProgram(program);
 
-                        context.uniform1f(program.getUniformLoc('xStep'),
-                            xStep);
-                        context.uniform1f(program.getUniformLoc('yStep'),
-                            yStep);
+                        context.uniform2f(
+                            context._currentProgram.getUniformLoc('texelSize'),
+                            texelSize.x, texelSize.y);
 
-                        context.uniform1i(program.getUniformLoc('xSpeed'),
-                            xSpeed);
-                        context.uniform1i(program.getUniformLoc('ySpeed'),
-                            ySpeed);
+                        context.uniform1f(
+                            context._currentProgram.getUniformLoc('fps'), fps);
 
-                        source.texture.render(0);
+                        context._currentCamera.sendUniforms(context);
+
+                        if (first) {
+                            rtt.colorTexture.render(0);
+                            first = false;
+                        } else {
+                            source.colorTexture.render(0);
+                        }
+                        rtt.depthTexture.render(1, 'depthTexture');
 
                         rtt.mesh.render();
+
+                        target.fbo.unbind();
                     }, this);
                 }
 
@@ -114,16 +119,15 @@ define([
                 if (this.rttEnabled) {
                     context.viewport(0, 0, canvas.width, canvas.height);
 
-                    rtt.framebuffer.unbind();
-
                     this.clear();
 
                     rtt.program.use();
 
                     if (this.postprocessingEnabled) {
-                        target.texture.render(0);
+                        target.colorTexture.render(0);
                     } else {
-                        rtt.texture.render(0);
+                        console.log(rtt.colorTexture);
+                        rtt.colorTexture.render(0);
                     }
 
                     rtt.mesh.render();

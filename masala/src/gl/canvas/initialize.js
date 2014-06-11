@@ -60,7 +60,6 @@ define([
                     });
                 }
 
-
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
                     resources.allMeshes[key] = new Mesh(context, source);

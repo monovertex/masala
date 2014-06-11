@@ -36,8 +36,9 @@ function (Class, namespace, load, loadFile) {
         },
 
         render: function (currentTime) {
+            var interval = (currentTime - this.previousTime) / 1000;
+
             if (this.isLoaded()) {
-                var interval = (currentTime - this.previousTime) / 1000;
 
                 _.each(this.sources.actors, function (actor) {
                     actor.update(interval);
@@ -50,7 +51,7 @@ function (Class, namespace, load, loadFile) {
                 this.sources.tree.object.prepareRender();
             }
 
-            this.trigger('render');
+            this.trigger('render', { interval: interval });
             this.previousTime = currentTime;
             this.request = requestAnimationFrame(this.render);
         },

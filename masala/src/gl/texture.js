@@ -118,10 +118,11 @@ define([
             this.context.bindTexture(this.context.TEXTURE_2D, null);
         },
 
-        render: function (unit, alpha) {
+        render: function (unit, uniformName) {
             var context = this.context,
-                program = context._currentProgram,
-                uniformName = (alpha ? 'alphaTexture' : 'colorTexture');
+                program = context._currentProgram;
+
+            uniformName = uniformName || 'colorTexture';
 
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();

@@ -1,9 +1,8 @@
 attribute vec3 vPosition;
 
 uniform mat4 modelMat;
-uniform mat4 viewMat;
-uniform mat4 projectionMat;
+uniform mat4 viewProjectionMat;
 
 void main(void) {
-    gl_Position = (projectionMat * viewMat * modelMat * vec4(vPosition, 1));
+    gl_Position = (viewProjectionMat * modelMat * vec4(vPosition, 1));
 }

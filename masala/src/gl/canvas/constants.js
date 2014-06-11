@@ -8,6 +8,9 @@ define([
             OPTIONS: [1, 2, 4, 8],
             NONE: 1
         },
+        EXTENSIONS: [
+            'WEBGL_depth_texture'
+        ],
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -40,8 +43,8 @@ define([
                         'uniform sampler2D colorTexture;' +
 
                         'void main() {' +
-                            'gl_FragColor = vec4(texture2D(' +
-                                'colorTexture, texCoords).xyz, 1);' +
+                            'gl_FragColor = vec4(' +
+                                'texture2D(colorTexture, texCoords).xyz, 1);' +
                         '}'
                 }
             }

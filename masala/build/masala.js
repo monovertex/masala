@@ -146,15 +146,19 @@ modules['gl/program/constants'] = {
                     }
                 },
                 MOTION: {
-                    X: {
-                        vertex: 'postprocessing/common.vert',
-                        fragment: 'postprocessing/blur/motion/x.frag'
-                    },
-                    Y: {
-                        vertex: 'postprocessing/common.vert',
-                        fragment: 'postprocessing/blur/motion/y.frag'
-                    }
+                    vertex: 'postprocessing/common.vert',
+                    fragment: 'postprocessing/blur/motion.frag'
                 }
+                // MOTION: {
+                //     X: {
+                //         vertex: 'postprocessing/common.vert',
+                //         fragment: 'postprocessing/blur/motion/x.frag'
+                //     },
+                //     Y: {
+                //         vertex: 'postprocessing/common.vert',
+                //         fragment: 'postprocessing/blur/motion/y.frag'
+                //     }
+                // }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
@@ -374,10 +378,11 @@ modules['gl/texture'] = (function (Class) {
             this.context.bindTexture(this.context.TEXTURE_2D, null);
         },
 
-        render: function (unit, alpha) {
+        render: function (unit, uniformName) {
             var context = this.context,
-                program = context._currentProgram,
-                uniformName = (alpha ? 'alphaTexture' : 'colorTexture');
+                program = context._currentProgram;
+
+            uniformName = uniformName || 'colorTexture';
 
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();
@@ -1014,8 +1019,6 @@ modules['interaction/actor/rotation'] = (function (constants) {
                 y: constants.ROTATIONS.NONE
             };
 
-            this.mouseDisplacement = { x: 0, y: 0 };
-
             this.rotationAngle = { x: 0, y: 0, z: 0 };
 
             this.gimbals = (_.isBoolean(options.gimbals) ?
@@ -1072,19 +1075,11 @@ modules['interaction/actor/rotation'] = (function (constants) {
             angles[this.rotationMouseControl.y] = constants.MOUSE_FACTOR *
                 this.rotationSensitivity[this.rotationMouseControl.y] * data.y;
 
-            this.mouseDisplacement.x += angles[this.rotationMouseControl.x];
-            this.mouseDisplacement.y += angles[this.rotationMouseControl.y];
-
             this.rotate(angles, true);
         },
 
         updateRotation: function (interval) {
             this.rotate(interval);
-        },
-
-        resetMouseDisplacement: function () {
-            this.mouseDisplacement.x = 0;
-            this.mouseDisplacement.y = 0;
         },
 
         getAngleIncrease: function (axis, angleData, exact) {
@@ -1422,6 +1417,12 @@ modules['interaction/camera'] = (function (Actor) {
             this.fov = _.isNumber(options.fov) ? options.fov : 60;
             this.zNear = _.isNumber(options.zNear) ? options.zNear : 0.1;
             this.zFar = _.isNumber(options.zFar) ? options.zFar : 500;
+
+            this.viewMatrix = glm.mat4.create();
+            this.projectionMatrix = glm.mat4.create();
+            this.eyePosition = glm.vec3.create();
+            this.currentViewProjectionMatrix = glm.mat4.create();
+            this.inverseViewProjectionMatrix = glm.mat4.create();
         },
 
         use: function (context) {
@@ -1431,37 +1432,58 @@ modules['interaction/camera'] = (function (Actor) {
         render: function (canvas, context) {
 
             if (context._currentCamera === this) {
-                var position = this.node.position,
-                    viewMatrix = glm.mat4.create(),
-                    modelMatrix = this.modelMatrix,
-                    eyePosition = glm.vec3.transformMat4([], position,
-                        modelMatrix),
-                    projectionMatrix = glm.mat4.create();
+                var position = this.node.position;
 
-                glm.mat4.lookAt(viewMatrix, position,
+                glm.vec3.transformMat4(this.eyePosition, position,
+                    this.modelMatrix);
+
+                glm.mat4.lookAt(this.viewMatrix, position,
                     glm.vec3.add([], position, this.forward), this.up);
 
-                glm.mat4.multiply(viewMatrix, modelMatrix, viewMatrix);
+                glm.mat4.multiply(this.viewMatrix, this.modelMatrix,
+                    this.viewMatrix);
 
-                context.uniformMatrix4fv(
-                    context._currentProgram.getUniformLoc('viewMat'),
-                    false,
-                    viewMatrix
-                );
+                glm.mat4.perspective(this.projectionMatrix,
+                    this.fov * Math.PI / 180, canvas.width / canvas.height,
+                    this.zNear, this.zFar);
 
-                context.uniform3f(
-                    context._currentProgram.getUniformLoc('eyePosition'),
-                    eyePosition[0], eyePosition[1], eyePosition[2]
-                );
+                this.previousViewProjectionMatrix = glm.mat4.clone(
+                    this.currentViewProjectionMatrix);
 
-                glm.mat4.perspective(projectionMatrix, this.fov * Math.PI / 180,
-                    canvas.width / canvas.height, this.zNear, this.zFar);
+                glm.mat4.multiply(this.currentViewProjectionMatrix,
+                    this.projectionMatrix, this.viewMatrix);
+                glm.mat4.invert(this.inverseViewProjectionMatrix,
+                    this.currentViewProjectionMatrix);
 
-                context.uniformMatrix4fv(
-                    context._currentProgram.getUniformLoc('projectionMat'),
-                    false, projectionMatrix);
+                this.sendUniforms(context);
             }
 
+        },
+
+        sendUniforms: function (context) {
+            context.uniformMatrix4fv(
+                context._currentProgram.getUniformLoc('viewMat'),
+                false, this.viewMatrix);
+
+            context.uniform3f(
+                context._currentProgram.getUniformLoc('eyePosition'),
+                this.eyePosition[0], this.eyePosition[1], this.eyePosition[2]);
+
+            context.uniformMatrix4fv(
+                context._currentProgram.getUniformLoc('projectionMat'),
+                false, this.projectionMatrix);
+
+            context.uniformMatrix4fv(
+                context._currentProgram.getUniformLoc('viewProjectionMat'),
+                false, this.currentViewProjectionMatrix);
+
+            context.uniformMatrix4fv(
+                context._currentProgram.getUniformLoc('viewProjectionInverseMat'),
+                false, this.inverseViewProjectionMatrix);
+
+            context.uniformMatrix4fv(
+                context._currentProgram.getUniformLoc('previousViewProjectionMat'),
+                false, this.previousViewProjectionMatrix);
         },
 
         prepareRender: function (modelMatrix) {
@@ -1527,7 +1549,6 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                         }
                     });
                 }
-
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
@@ -1639,6 +1660,9 @@ modules['gl/canvas/constants'] = (function (Vertex) {
             OPTIONS: [1, 2, 4, 8],
             NONE: 1
         },
+        EXTENSIONS: [
+            'WEBGL_depth_texture'
+        ],
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -1671,8 +1695,8 @@ modules['gl/canvas/constants'] = (function (Vertex) {
                         'uniform sampler2D colorTexture;' +
 
                         'void main() {' +
-                            'gl_FragColor = vec4(texture2D(' +
-                                'colorTexture, texCoords).xyz, 1);' +
+                            'gl_FragColor = vec4(' +
+                                'texture2D(colorTexture, texCoords).xyz, 1);' +
                         '}'
                 }
             }
@@ -1684,17 +1708,12 @@ modules['gl/canvas/constants'] = (function (Vertex) {
 modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
     return {
-        render: function () {
+        render: function (initiator, eventName, eventData) {
             var color,
                 context = this.context,
                 canvas = this.canvas,
-                rtt,
-                resources,
-                scene,
-                source,
-                target,
-                aux,
-                xStep, yStep, xSpeed, ySpeed;
+                rtt, resources, scene, source, target, aux,
+                texelSize = {}, first, fps;
 
             this.resize();
 
@@ -1718,9 +1737,9 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 rtt = this.rtt;
 
                 if (this.rttEnabled) {
-                    rtt.framebuffer.bind();
-                    context.viewport(0, 0, rtt.texture.width,
-                        rtt.texture.height);
+                    rtt.fbo.bind();
+                    context.viewport(0, 0, rtt.colorTexture.width,
+                        rtt.colorTexture.height);
                 } else {
                     context.viewport(0, 0, canvas.width, canvas.height);
                 }
@@ -1749,43 +1768,53 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                 resources.tree.render(context, resources);
 
+                if (this.rttEnabled) {
+                    rtt.fbo.unbind();
+                }
+
+
                 // Postprocessing.
                 if (this.postprocessingEnabled) {
-                    source = this.postprocessing;
-                    target = this.rtt;
-                    xStep = 1.0 / canvas.width;
-                    yStep = 1.0 / canvas.height;
-                    xSpeed = Math.ceil(Math.abs(context._currentCamera
-                        .mouseDisplacement.x) * 300);
-                    ySpeed = Math.ceil(Math.abs(context._currentCamera
-                        .mouseDisplacement.y) * 300);
+                    source = this.postprocessing.primary;
+                    target = this.postprocessing.secondary;
+                    first = true;
 
-                    context._currentCamera.resetMouseDisplacement();
+                    texelSize.x = 1.0 / canvas.width;
+                    texelSize.y = 1.0 / canvas.height;
+
+                    fps = 1.0 / eventData.interval;
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
                         source = target;
                         target = aux;
 
-                        target.framebuffer.bind();
+                        target.fbo.bind();
 
                         this.clear();
 
                         this.useProgram(program);
 
-                        context.uniform1f(program.getUniformLoc('xStep'),
-                            xStep);
-                        context.uniform1f(program.getUniformLoc('yStep'),
-                            yStep);
+                        context.uniform2f(
+                            context._currentProgram.getUniformLoc('texelSize'),
+                            texelSize.x, texelSize.y);
 
-                        context.uniform1i(program.getUniformLoc('xSpeed'),
-                            xSpeed);
-                        context.uniform1i(program.getUniformLoc('ySpeed'),
-                            ySpeed);
+                        context.uniform1f(
+                            context._currentProgram.getUniformLoc('fps'), fps);
 
-                        source.texture.render(0);
+                        context._currentCamera.sendUniforms(context);
+
+                        if (first) {
+                            rtt.colorTexture.render(0);
+                            first = false;
+                        } else {
+                            source.colorTexture.render(0);
+                        }
+                        rtt.depthTexture.render(1, 'depthTexture');
 
                         rtt.mesh.render();
+
+                        target.fbo.unbind();
                     }, this);
                 }
 
@@ -1793,16 +1822,15 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 if (this.rttEnabled) {
                     context.viewport(0, 0, canvas.width, canvas.height);
 
-                    rtt.framebuffer.unbind();
-
                     this.clear();
 
                     rtt.program.use();
 
                     if (this.postprocessingEnabled) {
-                        target.texture.render(0);
+                        target.colorTexture.render(0);
                     } else {
-                        rtt.texture.render(0);
+                        console.log(rtt.colorTexture);
+                        rtt.colorTexture.render(0);
                     }
 
                     rtt.mesh.render();
@@ -1857,21 +1885,24 @@ modules['gl/framebuffer'] = (function (Class) {
             this.context.bindFramebuffer(this.context.FRAMEBUFFER, null);
         },
 
-        attachColor: function (texture) {
+        attachTexture: function (texture, attachment) {
             this.bind();
 
-            this.context.framebufferTexture2D(
-                this.context.FRAMEBUFFER,
-                this.context.COLOR_ATTACHMENT0,
-                this.context.TEXTURE_2D,
-                texture.texture,
-                0
-            );
+            this.context.framebufferTexture2D(this.context.FRAMEBUFFER,
+                attachment, this.context.TEXTURE_2D, texture, 0);
 
             this.unbind();
         },
 
-        attachDepth: function (buffer) {
+        attachColorTexture: function (texture) {
+            this.attachTexture(texture.texture, this.context.COLOR_ATTACHMENT0);
+        },
+
+        attachDepthTexture: function (texture) {
+            this.attachTexture(texture.texture, this.context.DEPTH_ATTACHMENT);
+        },
+
+        attachDepthBuffer: function (buffer) {
             this.bind();
 
             this.context.framebufferRenderbuffer(
@@ -1897,7 +1928,7 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
             if (_.isUndefined(this.rtt)) {
                 var context = this.context,
                     rtt = {
-                        framebuffer: new Framebuffer(context),
+                        fbo: new Framebuffer(context),
                         program: new Program(context,
                             constants.RTT.PROGRAM.shaders)
                     };
@@ -1918,11 +1949,11 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
                     width = this.canvas.width * this.config.multisampling,
                     height = this.canvas.height * this.config.multisampling;
 
-                if (!_.isUndefined(rtt.texture)) {
-                    delete rtt.texture;
+                if (!_.isUndefined(rtt.colorTexture)) {
+                    delete rtt.colorTexture;
                 }
 
-                rtt.texture = new Texture(
+                rtt.colorTexture = new Texture(
                     _.extend({
                         source: null,
                         width: width,
@@ -1931,23 +1962,42 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
                     context
                 );
 
-                rtt.framebuffer.attachColor(rtt.texture);
+                rtt.fbo.attachColorTexture(rtt.colorTexture);
 
-                if (!_.isUndefined(rtt.depthbuffer)) {
-                    delete rtt.depthbuffer;
+                if (this.extensionAvailable('WEBGL_depth_texture')) {
+                    if (!_.isUndefined(rtt.depthTexture)) {
+                        delete rtt.depthTexture;
+                    }
+
+                    rtt.depthTexture = new Texture(
+                        _.extend({
+                            source: null,
+                            width: width,
+                            height: height,
+                            format: 'DEPTH_COMPONENT',
+                            type: 'UNSIGNED_SHORT'
+                        }, constants.RTT.TEXTURE),
+                        context
+                    );
+
+                    rtt.fbo.attachDepthTexture(rtt.depthTexture);
+                } else {
+                    if (!_.isUndefined(rtt.depthbuffer)) {
+                        delete rtt.depthbuffer;
+                    }
+
+                    rtt.depthbuffer = context.createRenderbuffer();
+
+                    context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
+                    context.renderbufferStorage(
+                        context.RENDERBUFFER,
+                        context.DEPTH_COMPONENT16,
+                        width,
+                        height
+                    );
+
+                    rtt.fbo.attachDepthBuffer(rtt.depthbuffer);
                 }
-
-                rtt.depthbuffer = context.createRenderbuffer();
-
-                context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
-                context.renderbufferStorage(
-                    context.RENDERBUFFER,
-                    context.DEPTH_COMPONENT16,
-                    width,
-                    height
-                );
-
-                rtt.framebuffer.attachDepth(rtt.depthbuffer);
             }
         }
     };
@@ -1962,7 +2012,12 @@ modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) 
             if (_.isUndefined(this.postprocessing)) {
                 var context = this.context,
                     postprocessing = {
-                        framebuffer: new Framebuffer(context)
+                        primary: {
+                            fbo: new Framebuffer(context)
+                        },
+                        secondary: {
+                            fbo: new Framebuffer(context)
+                        }
                     };
 
                 this.postprocessing = postprocessing;
@@ -1980,25 +2035,69 @@ modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) 
                     width = this.canvas.width * this.config.multisampling,
                     height = this.canvas.height * this.config.multisampling;
 
-                if (!_.isUndefined(postprocessing.texture)) {
-                    delete postprocessing.texture;
-                }
+                _.each(postprocessing, function (obj) {
+                    if (!_.isUndefined(obj.colorTexture)) {
+                        delete obj.colorTexture;
+                    }
 
-                postprocessing.texture = new Texture(
-                    _.extend({
-                        source: null,
-                        width: width,
-                        height: height
-                    }, constants.RTT.TEXTURE),
-                    context
-                );
+                    obj.colorTexture = new Texture(
+                        _.extend({
+                            source: null,
+                            width: width,
+                            height: height
+                        }, constants.RTT.TEXTURE),
+                        context
+                    );
 
-                postprocessing.framebuffer.attachColor(postprocessing.texture);
+                    obj.fbo.attachColorTexture(obj.colorTexture);
+                }, this);
             }
         }
     };
 
 }) (modules['gl/framebuffer'],modules['gl/canvas/constants'],modules['gl/texture']);
+
+
+modules['gl/canvas/extensions'] = (function (constants) {
+
+    var prefixes = ['', 'WEBKIT_', 'MOZ_'];
+
+    return {
+
+        initializeExtensions: function () {
+            var extensions = constants.EXTENSIONS,
+                context = this.context;
+
+            this.availableExtensions = {};
+            this.extensions = {};
+
+            _.each(extensions, function (extensionName) {
+                _.each(prefixes, function (prefix) {
+                    var name = prefix + extensionName,
+                        extension = context.getExtension(name);
+
+                    if (!_.isNull(extension)) {
+                        this.availableExtensions[extensionName] = true;
+                        this.extensions[extensionName] = extension;
+                        return false;
+                    }
+                }, this);
+            }, this);
+        },
+
+        extensionAvailable: function (name) {
+            return this.availableExtensions[name];
+        },
+
+        getExtension: function (name) {
+            if (this.extensionAvailable(name)) {
+                return this.extensions[name];
+            }
+        }
+
+    };
+
+}) (modules['gl/canvas/constants']);
 
 
 modules['utility/debug-output'] = (function () {
@@ -2024,7 +2123,7 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
@@ -2052,6 +2151,8 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
             context.enable(context.DEPTH_TEST);
 
             this.context = context;
+
+            this.initializeExtensions();
 
             if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
                 this.initializeRTT();
@@ -2088,9 +2189,9 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
             program.use(this.context);
         }
 
-    }, initialize, render, rtt, postprocessing));
+    }, initialize, render, rtt, postprocessing, extensions));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['utility/debug-output'],modules['interaction/cursor']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -2220,7 +2321,7 @@ modules['utility/node'] = (function (Class) {
                             program.getUniformLoc('alphaTextured'), 1);
 
                         resources.allTextures[this.alphaTexture]
-                            .render(1, true);
+                            .render(1, 'alphaTexture');
                     } else {
                         context.uniform1i(
                             program.getUniformLoc('alphaTextured'), 0);
@@ -2489,7 +2590,6 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 programs: schema.programs,
                 shaders: {},
                 defaultProgram: schema.defaultProgram,
-                postprocessing: schema.postprocessing,
 
                 actorOptions: schema.actors,
 
@@ -2518,11 +2618,33 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             this.parsedSchema = parsedSchema;
 
             // Postprocessing.
-            _.each(schema.postprocessing, function (name) {
-                if (name.indexOf('SHADER') === 0) {
-                    schema.programs[name] = name;
-                }
-            });
+            if (!_.isUndefined(schema.postprocessing)) {
+                sources.postprocessing = [];
+
+                _.each(schema.postprocessing, function (name) {
+                    if (name.indexOf('SHADER') === 0) {
+                        var originalName = name;
+
+                        name = name.replace('SHADER', 'PREDEFINED');
+                        options = this.getDotChain(name, programConstants);
+
+                        if ('vertex' in options && 'fragment' in options) {
+                            sources.postprocessing.push(originalName);
+                        } else {
+                            _.each(options, function (subProgram, name) {
+                                sources.postprocessing.push(
+                                    originalName + '.' + name);
+                            });
+                        }
+                    }
+                }, this);
+
+                _.each(sources.postprocessing, function (name) {
+                    if (name.indexOf('SHADER') === 0) {
+                        schema.programs[name] = name;
+                    }
+                }, this);
+            }
 
             // Shaders.
             _.each(schema.programs, function (options, name) {
@@ -2853,8 +2975,9 @@ modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
         },
 
         render: function (currentTime) {
+            var interval = (currentTime - this.previousTime) / 1000;
+
             if (this.isLoaded()) {
-                var interval = (currentTime - this.previousTime) / 1000;
 
                 _.each(this.sources.actors, function (actor) {
                     actor.update(interval);
@@ -2867,7 +2990,7 @@ modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
                 this.sources.tree.object.prepareRender();
             }
 
-            this.trigger('render');
+            this.trigger('render', { interval: interval });
             this.previousTime = currentTime;
             this.request = requestAnimationFrame(this.render);
         },

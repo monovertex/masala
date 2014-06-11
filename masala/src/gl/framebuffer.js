@@ -21,21 +21,24 @@ define([
             this.context.bindFramebuffer(this.context.FRAMEBUFFER, null);
         },
 
-        attachColor: function (texture) {
+        attachTexture: function (texture, attachment) {
             this.bind();
 
-            this.context.framebufferTexture2D(
-                this.context.FRAMEBUFFER,
-                this.context.COLOR_ATTACHMENT0,
-                this.context.TEXTURE_2D,
-                texture.texture,
-                0
-            );
+            this.context.framebufferTexture2D(this.context.FRAMEBUFFER,
+                attachment, this.context.TEXTURE_2D, texture, 0);
 
             this.unbind();
         },
 
-        attachDepth: function (buffer) {
+        attachColorTexture: function (texture) {
+            this.attachTexture(texture.texture, this.context.COLOR_ATTACHMENT0);
+        },
+
+        attachDepthTexture: function (texture) {
+            this.attachTexture(texture.texture, this.context.DEPTH_ATTACHMENT);
+        },
+
+        attachDepthBuffer: function (buffer) {
             this.bind();
 
             this.context.framebufferRenderbuffer(

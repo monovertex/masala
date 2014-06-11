@@ -31,7 +31,6 @@ define([
                 programs: schema.programs,
                 shaders: {},
                 defaultProgram: schema.defaultProgram,
-                postprocessing: schema.postprocessing,
 
                 actorOptions: schema.actors,
 
@@ -60,11 +59,33 @@ define([
             this.parsedSchema = parsedSchema;
 
             // Postprocessing.
-            _.each(schema.postprocessing, function (name) {
-                if (name.indexOf('SHADER') === 0) {
-                    schema.programs[name] = name;
-                }
-            });
+            if (!_.isUndefined(schema.postprocessing)) {
+                sources.postprocessing = [];
+
+                _.each(schema.postprocessing, function (name) {
+                    if (name.indexOf('SHADER') === 0) {
+                        var originalName = name;
+
+                        name = name.replace('SHADER', 'PREDEFINED');
+                        options = this.getDotChain(name, programConstants);
+
+                        if ('vertex' in options && 'fragment' in options) {
+                            sources.postprocessing.push(originalName);
+                        } else {
+                            _.each(options, function (subProgram, name) {
+                                sources.postprocessing.push(
+                                    originalName + '.' + name);
+                            });
+                        }
+                    }
+                }, this);
+
+                _.each(sources.postprocessing, function (name) {
+                    if (name.indexOf('SHADER') === 0) {
+                        schema.programs[name] = name;
+                    }
+                }, this);
+            }
 
             // Shaders.
             _.each(schema.programs, function (options, name) {

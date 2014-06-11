@@ -3,8 +3,7 @@ attribute vec3 vNormal;
 attribute vec2 vTexCoords;
 
 uniform mat4 modelMat;
-uniform mat4 viewMat;
-uniform mat4 projectionMat;
+uniform mat4 viewProjectionMat;
 
 varying vec3 vPositionGlobal;
 varying vec3 vNormalGlobal;
@@ -16,5 +15,5 @@ void main(void) {
 
     texCoords = vTexCoords;
 
-    gl_Position = (projectionMat * viewMat * modelMat * vec4(vPosition, 1));
+    gl_Position = (viewProjectionMat * modelMat * vec4(vPosition, 1));
 }

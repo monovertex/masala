@@ -28,15 +28,19 @@ define({
                     }
                 },
                 MOTION: {
-                    X: {
-                        vertex: 'postprocessing/common.vert',
-                        fragment: 'postprocessing/blur/motion/x.frag'
-                    },
-                    Y: {
-                        vertex: 'postprocessing/common.vert',
-                        fragment: 'postprocessing/blur/motion/y.frag'
-                    }
+                    vertex: 'postprocessing/common.vert',
+                    fragment: 'postprocessing/blur/motion.frag'
                 }
+                // MOTION: {
+                //     X: {
+                //         vertex: 'postprocessing/common.vert',
+                //         fragment: 'postprocessing/blur/motion/x.frag'
+                //     },
+                //     Y: {
+                //         vertex: 'postprocessing/common.vert',
+                //         fragment: 'postprocessing/blur/motion/y.frag'
+                //     }
+                // }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
