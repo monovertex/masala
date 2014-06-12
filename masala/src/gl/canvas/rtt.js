@@ -32,8 +32,8 @@ define([
             if (!_.isUndefined(this.rtt) && this.rttEnabled) {
                 var context = this.context,
                     rtt = this.rtt,
-                    width = this.canvas.width * this.config.multisampling,
-                    height = this.canvas.height * this.config.multisampling;
+                    width = this.canvas.width,
+                    height = this.canvas.height;
 
                 if (!_.isUndefined(rtt.colorTexture)) {
                     delete rtt.colorTexture;

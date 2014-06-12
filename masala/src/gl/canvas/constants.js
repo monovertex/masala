@@ -4,10 +4,6 @@ define([
 ], function (Vertex) {
 
     return  {
-        MULTISAMPLING: {
-            OPTIONS: [1, 2, 4, 8],
-            NONE: 1
-        },
         EXTENSIONS: [
             'WEBGL_depth_texture'
         ],

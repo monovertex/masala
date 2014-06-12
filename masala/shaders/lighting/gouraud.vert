@@ -1,11 +1,11 @@
-precision mediump float;
+attribute vec3 vPosition;
+attribute vec3 vNormal;
+attribute vec2 vTexCoords;
+
+uniform mat4 modelMat;
+uniform mat4 viewProjectionMat;
 
 uniform vec3 eyePosition;
-varying vec3 vPositionGlobal;
-varying vec3 vNormalGlobal;
-varying vec2 texCoords;
-
-//==============================================================================
 
 const int maxLights = 20;
 const float attenuationCutoff = 0.002;
@@ -20,12 +20,15 @@ uniform float lightAngleOuter[maxLights];
 uniform float lightRadius[maxLights];
 
 uniform float materialShininess;
-uniform vec3 materialEmissiveK;
 uniform vec3 materialAmbientK;
 uniform vec3 materialDiffuseK;
 uniform vec3 materialSpecularK;
 
 uniform vec3 ambientLight;
+
+varying vec2 texCoords;
+varying vec3 vColor;
+
 
 // Compute attenuation based on distance and light size.
 // More information:
@@ -46,9 +49,9 @@ float computeAttenuation(float distance, float radius) {
     return max(attenuation, 0.0);
 }
 
-// Compute the light for a vertex, coming from a single light source.
-vec3 computeLight(vec3 V, bool spotlight, vec3 color, vec3 position,
-    vec3 direction, float inner, float outer, float radius) {
+vec3 computeLight(vec3 V, vec3 vPositionGlobal, vec3 vNormalGlobal,
+    bool spotlight, vec3 color, vec3 position, vec3 direction,
+    float inner, float outer, float radius) {
 
     // Compute light direction.
     vec3 L = position - vPositionGlobal;
@@ -76,14 +79,10 @@ vec3 computeLight(vec3 V, bool spotlight, vec3 color, vec3 position,
 
         vec3 diffuseLight, specularLight;
 
-        // Calculate the diffuse component.
+        // Compute the diffuse component.
         float diffuseTerm = clamp(dot(vNormalGlobal, L), 0.0, 1.0);
         diffuseLight = materialDiffuseK * color * diffuseTerm;
 
-        // Compute the specular component and return attenuated and reduced
-        // color.
-        // We're using the diffuse term with a smoothstep to smooth the hard
-        // edges on the specular light.
         if (diffuseLight.r > 0.0 || diffuseLight.g > 0.0 ||
                 diffuseLight.b > 0.0) {
             specularLight = (materialSpecularK * color *
@@ -97,31 +96,14 @@ vec3 computeLight(vec3 V, bool spotlight, vec3 color, vec3 position,
     return vec3(0);
 }
 
-//==============================================================================
+void main(void) {
+    texCoords = vTexCoords;
 
-uniform bool textured;
-uniform bool alphaTextured;
-uniform sampler2D colorTexture;
-uniform sampler2D alphaTexture;
-
-//==============================================================================
-
-void main(){
+    vec3 vPositionGlobal = (modelMat * vec4(vPosition, 1)).xyz;
+    vec3 vNormalGlobal = normalize(mat3(modelMat) * vNormal);
 
     vec3 V = eyePosition - vPositionGlobal;
-    vec3 color = materialEmissiveK;
-
-    if (textured) {
-        color = texture2D(colorTexture, texCoords).xyz;
-    }
-
-    if (alphaTextured) {
-        if (texture2D(alphaTexture, texCoords).x < 0.5) {
-            discard;
-        }
-    }
-
-    color += materialAmbientK * ambientLight;
+    vec3 color = materialAmbientK * ambientLight;
 
     // Compute the color, considering every other light in the scene.
     for (int i = 0; i < maxLights; i++) {
@@ -129,10 +111,12 @@ void main(){
             break;
         }
 
-        color += computeLight(V, lightType[i] == 1, lightColor[i],
-            lightPosition[i], lightDirection[i], lightAngleInner[i],
-            lightAngleOuter[i], lightRadius[i]);
+        color += computeLight(V, vPositionGlobal, vNormalGlobal,
+            lightType[i] == 1, lightColor[i], lightPosition[i],
+            lightDirection[i], lightAngleInner[i], lightAngleOuter[i],
+            lightRadius[i]);
     }
 
-    gl_FragColor = vec4(color, 1);
+    vColor = color;
+    gl_Position = (viewProjectionMat * modelMat * vec4(vPosition, 1));
 }

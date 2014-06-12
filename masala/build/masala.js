@@ -131,6 +131,10 @@ modules['gl/program/constants'] = {
             PHONG: {
                 vertex: 'lighting/phong.vert',
                 fragment: 'lighting/phong.frag'
+            },
+            GOURAUD: {
+                vertex: 'lighting/gouraud.vert',
+                fragment: 'lighting/gouraud.frag'
             }
         },
         POSTPROCESSING: {
@@ -149,16 +153,6 @@ modules['gl/program/constants'] = {
                     vertex: 'postprocessing/common.vert',
                     fragment: 'postprocessing/blur/motion.frag'
                 }
-                // MOTION: {
-                //     X: {
-                //         vertex: 'postprocessing/common.vert',
-                //         fragment: 'postprocessing/blur/motion/x.frag'
-                //     },
-                //     Y: {
-                //         vertex: 'postprocessing/common.vert',
-                //         fragment: 'postprocessing/blur/motion/y.frag'
-                //     }
-                // }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
@@ -171,6 +165,10 @@ modules['gl/program/constants'] = {
             BLOOM: {
                 vertex: 'postprocessing/common.vert',
                 fragment: 'postprocessing/bloom.frag'
+            },
+            ANTIALIASING: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/fxaa.frag'
             }
         }
     },
@@ -1628,10 +1626,6 @@ modules['shading/render'] = (function () {
 modules['gl/canvas/constants'] = (function (Vertex) {
 
     return  {
-        MULTISAMPLING: {
-            OPTIONS: [1, 2, 4, 8],
-            NONE: 1
-        },
         EXTENSIONS: [
             'WEBGL_depth_texture'
         ],
@@ -1807,7 +1801,6 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                     if (this.postprocessingEnabled) {
                         target.colorTexture.render(0);
                     } else {
-                        console.log(rtt.colorTexture);
                         rtt.colorTexture.render(0);
                     }
 
@@ -1924,8 +1917,8 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
             if (!_.isUndefined(this.rtt) && this.rttEnabled) {
                 var context = this.context,
                     rtt = this.rtt,
-                    width = this.canvas.width * this.config.multisampling,
-                    height = this.canvas.height * this.config.multisampling;
+                    width = this.canvas.width,
+                    height = this.canvas.height;
 
                 if (!_.isUndefined(rtt.colorTexture)) {
                     delete rtt.colorTexture;
@@ -2010,8 +2003,8 @@ modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) 
                     this.postprocessingEnabled) {
                 var context = this.context,
                     postprocessing = this.postprocessing,
-                    width = this.canvas.width * this.config.multisampling,
-                    height = this.canvas.height * this.config.multisampling;
+                    width = this.canvas.width,
+                    height = this.canvas.height;
 
                 _.each(postprocessing, function (obj) {
                     if (!_.isUndefined(obj.colorTexture)) {
@@ -2146,11 +2139,6 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
 
-            if (constants.MULTISAMPLING.OPTIONS
-                    .indexOf(this.config.multisampling) === -1) {
-                this.config.multisampling = constants.MULTISAMPLING.NONE;
-            }
-
             this.scenes = {};
 
             this.canvas = canvas;
@@ -2169,10 +2157,6 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
             this.context = context;
 
             this.initializeExtensions();
-
-            if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
-                this.initializeRTT();
-            }
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 

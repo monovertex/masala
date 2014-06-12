@@ -2,7 +2,7 @@ precision mediump float;
 
 varying vec2 texCoords;
 
-uniform float xStep, yStep;
+uniform vec2 texelSize;
 uniform sampler2D colorTexture;
 
 float luminosity (vec3 color) {
@@ -18,7 +18,8 @@ void main () {
     for (int i = -2; i <= 2; i++) {
         for (int j = -2; j <= 2; j++) {
             avg += texture2D(colorTexture, texCoords +
-                vec2(float(i) * xStep, float(j) * yStep)).xyz * 0.04;
+                vec2(float(i) * texelSize.x, float(j) *
+                texelSize.y)).xyz * 0.04;
         }
     }
 

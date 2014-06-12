@@ -122,7 +122,6 @@ define([
                     if (this.postprocessingEnabled) {
                         target.colorTexture.render(0);
                     } else {
-                        console.log(rtt.colorTexture);
                         rtt.colorTexture.render(0);
                     }
 

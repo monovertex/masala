@@ -25,11 +25,6 @@ define([
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
 
-            if (constants.MULTISAMPLING.OPTIONS
-                    .indexOf(this.config.multisampling) === -1) {
-                this.config.multisampling = constants.MULTISAMPLING.NONE;
-            }
-
             this.scenes = {};
 
             this.canvas = canvas;
@@ -48,10 +43,6 @@ define([
             this.context = context;
 
             this.initializeExtensions();
-
-            if (this.config.multisampling !== constants.MULTISAMPLING.NONE) {
-                this.initializeRTT();
-            }
 
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 

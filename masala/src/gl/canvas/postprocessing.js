@@ -31,8 +31,8 @@ define([
                     this.postprocessingEnabled) {
                 var context = this.context,
                     postprocessing = this.postprocessing,
-                    width = this.canvas.width * this.config.multisampling,
-                    height = this.canvas.height * this.config.multisampling;
+                    width = this.canvas.width,
+                    height = this.canvas.height;
 
                 _.each(postprocessing, function (obj) {
                     if (!_.isUndefined(obj.colorTexture)) {

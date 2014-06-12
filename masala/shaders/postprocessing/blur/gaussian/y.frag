@@ -3,7 +3,7 @@ precision mediump float;
 varying vec2 texCoords;
 
 uniform sampler2D colorTexture;
-uniform float yStep;
+uniform vec2 texelSize;
 
 float filter[9];
 
@@ -14,8 +14,8 @@ vec3 blur() {
     for (int k = 0; k < 9; k++) {
         i = float(k - 4);
 
-        sum += texture2D(colorTexture, texCoords + vec2(0, i * yStep)).xyz *
-            filter[k];
+        sum += texture2D(colorTexture, texCoords +
+            vec2(0, i * texelSize.y)).xyz * filter[k];
     }
 
     return sum;

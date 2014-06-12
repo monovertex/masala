@@ -13,6 +13,10 @@ define({
             PHONG: {
                 vertex: 'lighting/phong.vert',
                 fragment: 'lighting/phong.frag'
+            },
+            GOURAUD: {
+                vertex: 'lighting/gouraud.vert',
+                fragment: 'lighting/gouraud.frag'
             }
         },
         POSTPROCESSING: {
@@ -31,16 +35,6 @@ define({
                     vertex: 'postprocessing/common.vert',
                     fragment: 'postprocessing/blur/motion.frag'
                 }
-                // MOTION: {
-                //     X: {
-                //         vertex: 'postprocessing/common.vert',
-                //         fragment: 'postprocessing/blur/motion/x.frag'
-                //     },
-                //     Y: {
-                //         vertex: 'postprocessing/common.vert',
-                //         fragment: 'postprocessing/blur/motion/y.frag'
-                //     }
-                // }
             },
             INVERT: {
                 vertex: 'postprocessing/common.vert',
@@ -53,6 +47,10 @@ define({
             BLOOM: {
                 vertex: 'postprocessing/common.vert',
                 fragment: 'postprocessing/bloom.frag'
+            },
+            ANTIALIASING: {
+                vertex: 'postprocessing/common.vert',
+                fragment: 'postprocessing/fxaa.frag'
             }
         }
     },
