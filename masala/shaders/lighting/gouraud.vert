@@ -55,8 +55,8 @@ vec3 computeLight(vec3 V, vec3 vPositionGlobal, vec3 vNormalGlobal,
 
     // Compute light direction.
     vec3 L = position - vPositionGlobal;
-    float distance = length(L);
-    L /= distance;
+    float dist = length(L);
+    L = normalize(L);
     float spotFalloff = 1.0;
     float currentAngle;
 
@@ -72,22 +72,27 @@ vec3 computeLight(vec3 V, vec3 vPositionGlobal, vec3 vNormalGlobal,
     // If our vertex is inside the spotlight or the light is omni.
     if (!spotlight || (spotlight && currentAngle > outer)) {
 
-        vec3 H = normalize(L + V);
-
-        // Compute attenuation.
-        float attenuation = computeAttenuation(distance, radius);
-
-        vec3 diffuseLight, specularLight;
-
         // Compute the diffuse component.
-        float diffuseTerm = clamp(dot(vNormalGlobal, L), 0.0, 1.0);
-        diffuseLight = materialDiffuseK * color * diffuseTerm;
+        float diffuseTerm = dot(vNormalGlobal, L);
 
-        if (diffuseLight.r > 0.0 || diffuseLight.g > 0.0 ||
-                diffuseLight.b > 0.0) {
+        // Compute the specular component and return attenuated and reduced
+        // color.
+        // We're using the diffuse term with a smoothstep to smooth the hard
+        // edges on dull specular light.
+        if (diffuseTerm > 0.0) {
+            vec3 diffuseLight, specularLight;
+
+            // Compute the reflected light ray.
+            vec3 R = normalize(reflect(-L, vNormalGlobal));
+
+            // Compute attenuation.
+            float attenuation = computeAttenuation(dist, radius);
+
+            diffuseLight = materialDiffuseK * color * diffuseTerm;
+
             specularLight = (materialSpecularK * color *
                 smoothstep(0.0, 1.0, diffuseTerm) *
-                pow(clamp(dot(vNormalGlobal, H), 0.0, 1.0), materialShininess));
+                pow(max(dot(V, R), 0.0), materialShininess));
 
             return spotFalloff * attenuation * (diffuseLight + specularLight);
         }
@@ -102,7 +107,7 @@ void main(void) {
     vec3 vPositionGlobal = (modelMat * vec4(vPosition, 1)).xyz;
     vec3 vNormalGlobal = normalize(mat3(modelMat) * vNormal);
 
-    vec3 V = eyePosition - vPositionGlobal;
+    vec3 V = normalize(eyePosition - vPositionGlobal);
     vec3 color = materialAmbientK * ambientLight;
 
     // Compute the color, considering every other light in the scene.
