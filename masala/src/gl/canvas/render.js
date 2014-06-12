@@ -54,9 +54,8 @@ define([
                     this.config.backgroundColor;
                 context.clearColor(color.r, color.g, color.b, 1);
 
-                context.uniform3f(
-                    context._currentProgram.getUniformLoc('ambientLight'),
-                    false, resources.ambientLight.r, resources.ambientLight.g,
+                context.uniform3f('ambientLight', false,
+                    resources.ambientLight.r, resources.ambientLight.g,
                     resources.ambientLight.b);
 
                 context._currentCamera.render(this.canvas, context);
@@ -92,12 +91,9 @@ define([
 
                         this.useProgram(program);
 
-                        context.uniform2f(
-                            context._currentProgram.getUniformLoc('texelSize'),
-                            texelSize.x, texelSize.y);
+                        context.uniform2f('texelSize', texelSize.x, texelSize.y);
 
-                        context.uniform1f(
-                            context._currentProgram.getUniformLoc('fps'), fps);
+                        context.uniform1f('fps', fps);
 
                         context._currentCamera.sendUniforms(context);
 

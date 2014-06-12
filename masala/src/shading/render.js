@@ -27,22 +27,14 @@ define([], function () {
             anglesOuter.push(data.angleOuter || 0);
         });
 
-        context.uniform1i(program.getUniformLoc('lightCount'),
-            _.size(lights));
-        context.uniform1iv(program.getUniformLoc('lightType'),
-            new Int32Array(types));
-        context.uniform1fv(program.getUniformLoc('lightRadius'),
-            new Float32Array(radii));
-        context.uniform3fv(program.getUniformLoc('lightPosition'),
-            new Float32Array(positions));
-        context.uniform3fv(program.getUniformLoc('lightColor'),
-            new Float32Array(colors));
-        context.uniform3fv(program.getUniformLoc('lightDirection'),
-            new Float32Array(directions));
-        context.uniform1fv(program.getUniformLoc('lightAngleInner'),
-            new Float32Array(anglesInner));
-        context.uniform1fv(program.getUniformLoc('lightAngleOuter'),
-            new Float32Array(anglesOuter));
+        context.uniform1i('lightCount', _.size(lights));
+        context.uniform1iv('lightType', new Int32Array(types));
+        context.uniform1fv('lightRadius', new Float32Array(radii));
+        context.uniform3fv('lightPosition', new Float32Array(positions));
+        context.uniform3fv('lightColor', new Float32Array(colors));
+        context.uniform3fv('lightDirection', new Float32Array(directions));
+        context.uniform1fv('lightAngleInner', new Float32Array(anglesInner));
+        context.uniform1fv('lightAngleOuter', new Float32Array(anglesOuter));
     };
 
 });

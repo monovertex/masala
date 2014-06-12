@@ -56,29 +56,22 @@ define([
         },
 
         sendUniforms: function (context) {
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewMat'),
-                false, this.viewMatrix);
+            context.uniformMatrix4fv('viewMat', false, this.viewMatrix);
 
-            context.uniform3f(
-                context._currentProgram.getUniformLoc('eyePosition'),
-                this.eyePosition[0], this.eyePosition[1], this.eyePosition[2]);
+            context.uniform3f('eyePosition', this.eyePosition[0],
+                this.eyePosition[1], this.eyePosition[2]);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('projectionMat'),
-                false, this.projectionMatrix);
+            context.uniformMatrix4fv('projectionMat', false,
+                this.projectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewProjectionMat'),
-                false, this.currentViewProjectionMatrix);
+            context.uniformMatrix4fv('viewProjectionMat', false,
+                this.currentViewProjectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewProjectionInverseMat'),
-                false, this.inverseViewProjectionMatrix);
+            context.uniformMatrix4fv('viewProjectionInverseMat', false,
+                this.inverseViewProjectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('previousViewProjectionMat'),
-                false, this.previousViewProjectionMatrix);
+            context.uniformMatrix4fv('previousViewProjectionMat', false,
+                this.previousViewProjectionMatrix);
         },
 
         prepareRender: function (modelMatrix) {

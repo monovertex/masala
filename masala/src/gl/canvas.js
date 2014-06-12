@@ -10,12 +10,13 @@ define([
     'gl/canvas/rtt',
     'gl/canvas/postprocessing',
     'gl/canvas/extensions',
+    'gl/canvas/extend-context',
 
     'utility/debug-output',
 
     'interaction/cursor'
 ], function (namespace, Class, initialize, render, constants, rtt,
-        postprocessing, extensions, debugOutput, cursor) {
+        postprocessing, extensions, extendContext, debugOutput, cursor) {
 
     return Class.extend(_.extend({
 
@@ -41,6 +42,8 @@ define([
             }
 
             context.enable(context.DEPTH_TEST);
+
+            extendContext(context);
 
             this.context = context;
 

@@ -126,7 +126,7 @@ define([
 
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();
-            context.uniform1i(program.getUniformLoc(uniformName), unit);
+            context.uniform1i(uniformName, unit);
         }
 
     });

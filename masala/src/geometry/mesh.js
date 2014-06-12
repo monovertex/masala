@@ -74,41 +74,28 @@ define([
 
         linkAttributes: function () {
             var context = this.context,
-                program = context._currentProgram,
-                VERTEX = geometryConstants.VERTEX,
-                attributePosition = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_POSITION),
-                attributeNormal = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_NORMAL),
-                attributeTexcoords = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_TEX_COORDS);
+                VERTEX = geometryConstants.VERTEX;
 
-            if (attributePosition > 0 || attributePosition === 0) {
-                context.vertexAttribPointer(
-                    attributePosition,
-                    VERTEX.ITEM_SIZE.POSITION,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.POSITION
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_POSITION,
+                VERTEX.ITEM_SIZE.POSITION,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.POSITION
+            );
 
-            if (attributeNormal > 0 || attributeNormal === 0) {
-                context.vertexAttribPointer(
-                    attributeNormal,
-                    VERTEX.ITEM_SIZE.NORMAL,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.NORMAL
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_NORMAL,
+                VERTEX.ITEM_SIZE.NORMAL,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.NORMAL
+            );
 
-            if (attributeTexcoords > 0 || attributeTexcoords === 0) {
-                context.vertexAttribPointer(
-                    attributeTexcoords,
-                    VERTEX.ITEM_SIZE.TEX_COORD,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.TEX_COORD
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_TEX_COORDS,
+                VERTEX.ITEM_SIZE.TEX_COORD,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.TEX_COORD
+            );
         }
 
     }, parse));

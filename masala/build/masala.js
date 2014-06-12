@@ -386,7 +386,7 @@ modules['gl/texture'] = (function (Class) {
 
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();
-            context.uniform1i(program.getUniformLoc(uniformName), unit);
+            context.uniform1i(uniformName, unit);
         }
 
     });
@@ -713,41 +713,28 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
         linkAttributes: function () {
             var context = this.context,
-                program = context._currentProgram,
-                VERTEX = geometryConstants.VERTEX,
-                attributePosition = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_POSITION),
-                attributeNormal = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_NORMAL),
-                attributeTexcoords = program.getAttribLoc(
-                    programConstants.ATTRIBUTES.VERTEX_TEX_COORDS);
+                VERTEX = geometryConstants.VERTEX;
 
-            if (attributePosition > 0 || attributePosition === 0) {
-                context.vertexAttribPointer(
-                    attributePosition,
-                    VERTEX.ITEM_SIZE.POSITION,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.POSITION
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_POSITION,
+                VERTEX.ITEM_SIZE.POSITION,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.POSITION
+            );
 
-            if (attributeNormal > 0 || attributeNormal === 0) {
-                context.vertexAttribPointer(
-                    attributeNormal,
-                    VERTEX.ITEM_SIZE.NORMAL,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.NORMAL
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_NORMAL,
+                VERTEX.ITEM_SIZE.NORMAL,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.NORMAL
+            );
 
-            if (attributeTexcoords > 0 || attributeTexcoords === 0) {
-                context.vertexAttribPointer(
-                    attributeTexcoords,
-                    VERTEX.ITEM_SIZE.TEX_COORD,
-                    context.FLOAT,
-                    false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.TEX_COORD
-                );
-            }
+            context.vertexAttribPointer(
+                programConstants.ATTRIBUTES.VERTEX_TEX_COORDS,
+                VERTEX.ITEM_SIZE.TEX_COORD,
+                context.FLOAT,
+                false, VERTEX.SIZE, VERTEX.ITEM_OFFSET.TEX_COORD
+            );
         }
 
     }, parse));
@@ -1461,29 +1448,22 @@ modules['interaction/camera'] = (function (Actor) {
         },
 
         sendUniforms: function (context) {
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewMat'),
-                false, this.viewMatrix);
+            context.uniformMatrix4fv('viewMat', false, this.viewMatrix);
 
-            context.uniform3f(
-                context._currentProgram.getUniformLoc('eyePosition'),
-                this.eyePosition[0], this.eyePosition[1], this.eyePosition[2]);
+            context.uniform3f('eyePosition', this.eyePosition[0],
+                this.eyePosition[1], this.eyePosition[2]);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('projectionMat'),
-                false, this.projectionMatrix);
+            context.uniformMatrix4fv('projectionMat', false,
+                this.projectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewProjectionMat'),
-                false, this.currentViewProjectionMatrix);
+            context.uniformMatrix4fv('viewProjectionMat', false,
+                this.currentViewProjectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('viewProjectionInverseMat'),
-                false, this.inverseViewProjectionMatrix);
+            context.uniformMatrix4fv('viewProjectionInverseMat', false,
+                this.inverseViewProjectionMatrix);
 
-            context.uniformMatrix4fv(
-                context._currentProgram.getUniformLoc('previousViewProjectionMat'),
-                false, this.previousViewProjectionMatrix);
+            context.uniformMatrix4fv('previousViewProjectionMat', false,
+                this.previousViewProjectionMatrix);
         },
 
         prepareRender: function (modelMatrix) {
@@ -1633,22 +1613,14 @@ modules['shading/render'] = (function () {
             anglesOuter.push(data.angleOuter || 0);
         });
 
-        context.uniform1i(program.getUniformLoc('lightCount'),
-            _.size(lights));
-        context.uniform1iv(program.getUniformLoc('lightType'),
-            new Int32Array(types));
-        context.uniform1fv(program.getUniformLoc('lightRadius'),
-            new Float32Array(radii));
-        context.uniform3fv(program.getUniformLoc('lightPosition'),
-            new Float32Array(positions));
-        context.uniform3fv(program.getUniformLoc('lightColor'),
-            new Float32Array(colors));
-        context.uniform3fv(program.getUniformLoc('lightDirection'),
-            new Float32Array(directions));
-        context.uniform1fv(program.getUniformLoc('lightAngleInner'),
-            new Float32Array(anglesInner));
-        context.uniform1fv(program.getUniformLoc('lightAngleOuter'),
-            new Float32Array(anglesOuter));
+        context.uniform1i('lightCount', _.size(lights));
+        context.uniform1iv('lightType', new Int32Array(types));
+        context.uniform1fv('lightRadius', new Float32Array(radii));
+        context.uniform3fv('lightPosition', new Float32Array(positions));
+        context.uniform3fv('lightColor', new Float32Array(colors));
+        context.uniform3fv('lightDirection', new Float32Array(directions));
+        context.uniform1fv('lightAngleInner', new Float32Array(anglesInner));
+        context.uniform1fv('lightAngleOuter', new Float32Array(anglesOuter));
     };
 
 }) ();
@@ -1700,6 +1672,16 @@ modules['gl/canvas/constants'] = (function (Vertex) {
                         '}'
                 }
             }
+        },
+        CONTEXT_METHODS: {
+            UNIFORMS: [
+                'uniform1f', 'uniform1fv', 'uniform1i', 'uniform1iv',
+                'uniform2f', 'uniform2fv', 'uniform2i', 'uniform2iv',
+                'uniform3f', 'uniform3fv', 'uniform3i', 'uniform3iv',
+                'uniform4f', 'uniform4fv', 'uniform4i', 'uniform4iv',
+                'uniformMatrix2fv', 'uniformMatrix3fv', 'uniformMatrix4fv'
+            ],
+            ATTRIBUTES: ['vertexAttribPointer']
         }
     };
 
@@ -1757,9 +1739,8 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                     this.config.backgroundColor;
                 context.clearColor(color.r, color.g, color.b, 1);
 
-                context.uniform3f(
-                    context._currentProgram.getUniformLoc('ambientLight'),
-                    false, resources.ambientLight.r, resources.ambientLight.g,
+                context.uniform3f('ambientLight', false,
+                    resources.ambientLight.r, resources.ambientLight.g,
                     resources.ambientLight.b);
 
                 context._currentCamera.render(this.canvas, context);
@@ -1795,12 +1776,9 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                         this.useProgram(program);
 
-                        context.uniform2f(
-                            context._currentProgram.getUniformLoc('texelSize'),
-                            texelSize.x, texelSize.y);
+                        context.uniform2f('texelSize', texelSize.x, texelSize.y);
 
-                        context.uniform1f(
-                            context._currentProgram.getUniformLoc('fps'), fps);
+                        context.uniform1f('fps', fps);
 
                         context._currentCamera.sendUniforms(context);
 
@@ -2099,6 +2077,42 @@ modules['gl/canvas/extensions'] = (function (constants) {
 
 }) (modules['gl/canvas/constants']);
 
+modules['gl/canvas/extend-context'] = (function (constants) {
+
+    function extendContext(context, methodName, getter) {
+        var originalMethod = context[methodName];
+
+        context['_' + methodName] = originalMethod;
+
+        context[methodName] = (function (locationName) {
+            var program = this._currentProgram,
+                location, actualArguments;
+
+            if (!_.isUndefined(program)) {
+                location = program[getter].call(program, locationName);
+
+                if (!_.isNull(location) && location !== -1) {
+                    actualArguments = Array.prototype.slice.call(arguments, 1);
+                    actualArguments.unshift(location);
+
+                    originalMethod.apply(context, actualArguments);
+                }
+            }
+        }).bind(context);
+    }
+
+    return function (context) {
+        _.each(constants.CONTEXT_METHODS.UNIFORMS, function (methodName) {
+            extendContext(this, methodName, 'getUniformLoc');
+        }, context);
+
+        _.each(constants.CONTEXT_METHODS.ATTRIBUTES, function (methodName) {
+            extendContext(this, methodName, 'getAttribLoc');
+        }, context);
+    };
+
+}) (modules['gl/canvas/constants']);
+
 
 modules['utility/debug-output'] = (function () {
 
@@ -2123,7 +2137,7 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,extendContext,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
@@ -2149,6 +2163,8 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
             }
 
             context.enable(context.DEPTH_TEST);
+
+            extendContext(context);
 
             this.context = context;
 
@@ -2191,7 +2207,7 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
 
     }, initialize, render, rtt, postprocessing, extensions));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['utility/debug-output'],modules['interaction/cursor']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['gl/canvas/extend-context'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -2301,30 +2317,28 @@ modules['utility/node'] = (function (Class) {
                 if (!_.isUndefined(this.mesh)) {
                     var program = context._currentProgram;
 
-                    context.uniformMatrix4fv(program.getUniformLoc('modelMat'),
-                        false, this.modelMatrix);
+                    context.uniformMatrix4fv('modelMat', false,
+                        this.modelMatrix);
 
                     if (!_.isUndefined(this.material)) {
                         this.material.render(context);
                     }
 
                     if (!_.isUndefined(this.texture)) {
-                        context.uniform1i(program.getUniformLoc('textured'), 1);
+                        context.uniform1i('textured', 1);
 
                         resources.allTextures[this.texture].render(0);
                     } else {
-                        context.uniform1i(program.getUniformLoc('textured'), 0);
+                        context.uniform1i('textured', 0);
                     }
 
                     if (!_.isUndefined(this.alphaTexture)) {
-                        context.uniform1i(
-                            program.getUniformLoc('alphaTextured'), 1);
+                        context.uniform1i('alphaTextured', 1);
 
                         resources.allTextures[this.alphaTexture]
                             .render(1, 'alphaTexture');
                     } else {
-                        context.uniform1i(
-                            program.getUniformLoc('alphaTextured'), 0);
+                        context.uniform1i('alphaTextured', 0);
                     }
 
                     resources.allMeshes[this.mesh].render();
@@ -2557,16 +2571,15 @@ modules['shading/material'] = (function (Class,Color) {
         render: function (context) {
             var program = context._currentProgram;
 
-            context.uniform1f(program.getUniformLoc('materialShininess'),
-                this.shininess);
-            context.uniform3f(program.getUniformLoc('materialEmissiveK'),
-                this.emissive.r, this.emissive.g, this.emissive.b);
-            context.uniform3f(program.getUniformLoc('materialAmbientK'),
-                this.ambient.r, this.ambient.g, this.ambient.b);
-            context.uniform3f(program.getUniformLoc('materialDiffuseK'),
-                this.diffuse.r, this.diffuse.g, this.diffuse.b);
-            context.uniform3f(program.getUniformLoc('materialSpecularK'),
-                this.specular.r, this.specular.g, this.specular.b);
+            context.uniform1f('materialShininess', this.shininess);
+            context.uniform3f('materialEmissiveK', this.emissive.r,
+                this.emissive.g, this.emissive.b);
+            context.uniform3f('materialAmbientK', this.ambient.r,
+                this.ambient.g, this.ambient.b);
+            context.uniform3f('materialDiffuseK', this.diffuse.r,
+                this.diffuse.g, this.diffuse.b);
+            context.uniform3f('materialSpecularK', this.specular.r,
+                this.specular.g, this.specular.b);
         }
 
     });

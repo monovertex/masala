@@ -50,30 +50,28 @@ function (Class) {
                 if (!_.isUndefined(this.mesh)) {
                     var program = context._currentProgram;
 
-                    context.uniformMatrix4fv(program.getUniformLoc('modelMat'),
-                        false, this.modelMatrix);
+                    context.uniformMatrix4fv('modelMat', false,
+                        this.modelMatrix);
 
                     if (!_.isUndefined(this.material)) {
                         this.material.render(context);
                     }
 
                     if (!_.isUndefined(this.texture)) {
-                        context.uniform1i(program.getUniformLoc('textured'), 1);
+                        context.uniform1i('textured', 1);
 
                         resources.allTextures[this.texture].render(0);
                     } else {
-                        context.uniform1i(program.getUniformLoc('textured'), 0);
+                        context.uniform1i('textured', 0);
                     }
 
                     if (!_.isUndefined(this.alphaTexture)) {
-                        context.uniform1i(
-                            program.getUniformLoc('alphaTextured'), 1);
+                        context.uniform1i('alphaTextured', 1);
 
                         resources.allTextures[this.alphaTexture]
                             .render(1, 'alphaTexture');
                     } else {
-                        context.uniform1i(
-                            program.getUniformLoc('alphaTextured'), 0);
+                        context.uniform1i('alphaTextured', 0);
                     }
 
                     resources.allMeshes[this.mesh].render();
