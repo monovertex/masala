@@ -45,6 +45,7 @@ function (Class) {
         },
 
         render: function (context, resources) {
+            var textureUnits = [];
 
             if (context._currentCamera !== this.camera) {
                 if (!_.isUndefined(this.mesh)) {
@@ -58,9 +59,23 @@ function (Class) {
                     }
 
                     if (!_.isUndefined(this.texture)) {
+                        resources.allTextures[this.texture].render(
+                            textureUnits.length);
+                        textureUnits.push(textureUnits.length);
+                    } else if (!_.isUndefined(this.textures)) {
+                        _.each(this.textures, function (texture) {
+                            resources.allTextures[texture].render(
+                                textureUnits.length);
+                            textureUnits.push(textureUnits.length);
+                        });
+                    }
+
+                    if (textureUnits.length > 0) {
                         context.uniform1i('textured', 1);
 
-                        resources.allTextures[this.texture].render(0);
+                        context.uniform1iv('colorTexture', textureUnits);
+
+                        context.uniform1i('textureCount', textureUnits.length);
                     } else {
                         context.uniform1i('textured', 0);
                     }
@@ -69,7 +84,7 @@ function (Class) {
                         context.uniform1i('alphaTextured', 1);
 
                         resources.allTextures[this.alphaTexture]
-                            .render(1, 'alphaTexture');
+                            .render(textureUnits.length, 'alphaTexture');
                     } else {
                         context.uniform1i('alphaTextured', 0);
                     }

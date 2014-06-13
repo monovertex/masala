@@ -1,13 +1,10 @@
 {
     "ambientLight": { "r": 0.1, "g": 0.1, "b": 0.1 },
     "programs": {
-        "lighting": "SHADER.LIGHTING.PHONG",
+        "lighting": "SHADER.LIGHTING.GOURAUD",
         "basic": "SHADER.BASIC"
     },
     "defaultProgram": "lighting",
-    "postprocessing": [
-        "SHADER.POSTPROCESSING.ANTIALIASING"
-    ],
     "meshes": {
         "sphere": "/masala/meshes/sphere.obj",
         "cube": "/masala/meshes/cube.obj"
@@ -15,6 +12,11 @@
     "textures": {
         "rock": {
             "path": "/textures/rock.jpg",
+            "filter": "LINEAR",
+            "wrap": "REPEAT"
+        },
+        "ground": {
+            "path": "/textures/ground.jpg",
             "filter": "LINEAR",
             "wrap": "REPEAT"
         }
@@ -103,7 +105,7 @@
                     "mesh": "cube",
                     "material": "green",
                     "position": { "x": 2, "z": 4 },
-                    "texture": "rock"
+                    "textures": ["rock", "ground"]
                 }
             ]
         },

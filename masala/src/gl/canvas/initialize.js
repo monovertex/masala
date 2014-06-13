@@ -96,6 +96,7 @@ define([
 
             node.mesh = source.mesh;
             node.texture = source.texture;
+            node.textures = source.textures;
             node.alphaTexture = source.alphaTexture;
 
             if (!_.isUndefined(source.name)) {

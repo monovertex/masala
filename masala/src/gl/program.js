@@ -25,8 +25,8 @@ define([
 
                 if (!context.getShaderParameter(shader,
                         context.COMPILE_STATUS)) {
-                    console.log(context.getShaderInfoLog(shader));
-                    throw 'Shader compilation error ';
+                    throw('Shader compilation error: \n' +
+                        context.getShaderInfoLog(shader));
                 }
 
                 context.attachShader(program, shader);
@@ -35,7 +35,8 @@ define([
             context.linkProgram(program);
 
             if (!context.getProgramParameter(program, context.LINK_STATUS)) {
-                throw('Could not link shaders');
+                throw('Could not link program: \n' +
+                    context.getProgramInfoLog(program));
             }
 
             this.context = context;

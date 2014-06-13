@@ -7,6 +7,7 @@ define([
         EXTENSIONS: [
             'WEBGL_depth_texture'
         ],
+        MAX_TEXTURE_UNITS: 16,
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',

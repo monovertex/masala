@@ -122,11 +122,12 @@ define([
             var context = this.context,
                 program = context._currentProgram;
 
-            uniformName = uniformName || 'colorTexture';
-
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();
-            context.uniform1i(uniformName, unit);
+
+            if (!_.isUndefined(uniformName)) {
+                context.uniform1i(uniformName, unit);
+            }
         }
 
     });

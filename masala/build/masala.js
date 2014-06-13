@@ -202,8 +202,8 @@ modules['gl/program'] = (function (Class,programConstants) {
 
                 if (!context.getShaderParameter(shader,
                         context.COMPILE_STATUS)) {
-                    console.log(context.getShaderInfoLog(shader));
-                    throw 'Shader compilation error ';
+                    throw('Shader compilation error: \n' +
+                        context.getShaderInfoLog(shader));
                 }
 
                 context.attachShader(program, shader);
@@ -212,7 +212,8 @@ modules['gl/program'] = (function (Class,programConstants) {
             context.linkProgram(program);
 
             if (!context.getProgramParameter(program, context.LINK_STATUS)) {
-                throw('Could not link shaders');
+                throw('Could not link program: \n' +
+                    context.getProgramInfoLog(program));
             }
 
             this.context = context;
@@ -380,11 +381,12 @@ modules['gl/texture'] = (function (Class) {
             var context = this.context,
                 program = context._currentProgram;
 
-            uniformName = uniformName || 'colorTexture';
-
             context.activeTexture(context.TEXTURE0 + unit);
             this.bind();
-            context.uniform1i(uniformName, unit);
+
+            if (!_.isUndefined(uniformName)) {
+                context.uniform1i(uniformName, unit);
+            }
         }
 
     });
@@ -1564,6 +1566,7 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
 
             node.mesh = source.mesh;
             node.texture = source.texture;
+            node.textures = source.textures;
             node.alphaTexture = source.alphaTexture;
 
             if (!_.isUndefined(source.name)) {
@@ -1629,6 +1632,7 @@ modules['gl/canvas/constants'] = (function (Vertex) {
         EXTENSIONS: [
             'WEBGL_depth_texture'
         ],
+        MAX_TEXTURE_UNITS: 16,
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -2296,6 +2300,7 @@ modules['utility/node'] = (function (Class) {
         },
 
         render: function (context, resources) {
+            var textureUnits = [];
 
             if (context._currentCamera !== this.camera) {
                 if (!_.isUndefined(this.mesh)) {
@@ -2309,9 +2314,23 @@ modules['utility/node'] = (function (Class) {
                     }
 
                     if (!_.isUndefined(this.texture)) {
+                        resources.allTextures[this.texture].render(
+                            textureUnits.length);
+                        textureUnits.push(textureUnits.length);
+                    } else if (!_.isUndefined(this.textures)) {
+                        _.each(this.textures, function (texture) {
+                            resources.allTextures[texture].render(
+                                textureUnits.length);
+                            textureUnits.push(textureUnits.length);
+                        });
+                    }
+
+                    if (textureUnits.length > 0) {
                         context.uniform1i('textured', 1);
 
-                        resources.allTextures[this.texture].render(0);
+                        context.uniform1iv('colorTexture', textureUnits);
+
+                        context.uniform1i('textureCount', textureUnits.length);
                     } else {
                         context.uniform1i('textured', 0);
                     }
@@ -2320,7 +2339,7 @@ modules['utility/node'] = (function (Class) {
                         context.uniform1i('alphaTextured', 1);
 
                         resources.allTextures[this.alphaTexture]
-                            .render(1, 'alphaTexture');
+                            .render(textureUnits.length, 'alphaTexture');
                     } else {
                         context.uniform1i('alphaTextured', 0);
                     }
@@ -2750,29 +2769,41 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 }
             }
 
-            this.parseNodeTexture(node, 'texture');
-            this.parseNodeTexture(node, 'alphaTexture');
+            if (!_.isUndefined(node.texture)) {
+                node.texture = this.parseTexture(node.texture);
+            } else if (!_.isUndefined(node.textures) &&
+                    _.isArray(node.textures)) {
+                var textures = [];
+
+                _.each(node.textures, function (texture) {
+                    textures.push(this.parseTexture(texture));
+                }, this);
+
+                node.textures = textures;
+            }
+
+            if (!_.isUndefined(node.alphaTexture)) {
+                node.alphaTexture = this.parseTexture(node.alphaTexture);
+            }
 
             if (!_.isUndefined(node.children) && _.isArray(node.children)) {
                 _.each(node.children, this.parseNode, this);
             }
         },
 
-        parseNodeTexture: function (node, prop) {
-            if (!_.isUndefined(node[prop])) {
-                if (_.isString(node[prop]) &&
-                        node[prop] in this.sources.textureNames) {
-                    node[prop] = this.sources.textureNames[node[prop]];
-                } else if (_.isPlainObject(node[prop])) {
-                    this.sources.textureOptions.push(node[prop]);
+        parseTexture: function (options) {
+            if (_.isString(options) &&
+                    options in this.sources.textureNames) {
+                return this.sources.textureNames[options];
+            } else if (_.isPlainObject(options)) {
+                this.sources.textureOptions.push(options);
 
-                    if (_.indexOf(this.parsedSchema.texturePaths,
-                            node[prop].path) === -1) {
-                        this.parsedSchema.texturePaths.push(node[prop].path);
-                    }
-
-                    node[prop] = this.parsedSchema.texturePaths.length - 1;
+                if (_.indexOf(this.parsedSchema.texturePaths,
+                        options.path) === -1) {
+                    this.parsedSchema.texturePaths.push(options.path);
                 }
+
+                return this.parsedSchema.texturePaths.length - 1;
             }
         },
 
@@ -2816,15 +2847,9 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                     );
                 }
 
-                // Set texture.
-                if (!_.isUndefined(options.texture)) {
-                    node.texture = options.texture;
-                }
-
-                // Set alpha texture.
-                if (!_.isUndefined(options.alphaTexture)) {
-                    node.alphaTexture = options.alphaTexture;
-                }
+                node.texture = options.texture;
+                node.textures = options.textures;
+                node.alphaTexture = options.alphaTexture;
             }
 
             // Instantiate actor.

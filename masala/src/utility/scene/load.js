@@ -194,29 +194,41 @@ define([
                 }
             }
 
-            this.parseNodeTexture(node, 'texture');
-            this.parseNodeTexture(node, 'alphaTexture');
+            if (!_.isUndefined(node.texture)) {
+                node.texture = this.parseTexture(node.texture);
+            } else if (!_.isUndefined(node.textures) &&
+                    _.isArray(node.textures)) {
+                var textures = [];
+
+                _.each(node.textures, function (texture) {
+                    textures.push(this.parseTexture(texture));
+                }, this);
+
+                node.textures = textures;
+            }
+
+            if (!_.isUndefined(node.alphaTexture)) {
+                node.alphaTexture = this.parseTexture(node.alphaTexture);
+            }
 
             if (!_.isUndefined(node.children) && _.isArray(node.children)) {
                 _.each(node.children, this.parseNode, this);
             }
         },
 
-        parseNodeTexture: function (node, prop) {
-            if (!_.isUndefined(node[prop])) {
-                if (_.isString(node[prop]) &&
-                        node[prop] in this.sources.textureNames) {
-                    node[prop] = this.sources.textureNames[node[prop]];
-                } else if (_.isPlainObject(node[prop])) {
-                    this.sources.textureOptions.push(node[prop]);
+        parseTexture: function (options) {
+            if (_.isString(options) &&
+                    options in this.sources.textureNames) {
+                return this.sources.textureNames[options];
+            } else if (_.isPlainObject(options)) {
+                this.sources.textureOptions.push(options);
 
-                    if (_.indexOf(this.parsedSchema.texturePaths,
-                            node[prop].path) === -1) {
-                        this.parsedSchema.texturePaths.push(node[prop].path);
-                    }
-
-                    node[prop] = this.parsedSchema.texturePaths.length - 1;
+                if (_.indexOf(this.parsedSchema.texturePaths,
+                        options.path) === -1) {
+                    this.parsedSchema.texturePaths.push(options.path);
                 }
+
+                return this.parsedSchema.texturePaths.length - 1;
             }
         },
 
@@ -260,15 +272,9 @@ define([
                     );
                 }
 
-                // Set texture.
-                if (!_.isUndefined(options.texture)) {
-                    node.texture = options.texture;
-                }
-
-                // Set alpha texture.
-                if (!_.isUndefined(options.alphaTexture)) {
-                    node.alphaTexture = options.alphaTexture;
-                }
+                node.texture = options.texture;
+                node.textures = options.textures;
+                node.alphaTexture = options.alphaTexture;
             }
 
             // Instantiate actor.
