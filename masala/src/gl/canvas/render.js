@@ -127,11 +127,6 @@ define([
 
                     rtt.mesh.render();
                 }
-            } else {
-                color = this.config.backgroundColor;
-                context.clearColor(color.r, color.g, color.b, 1);
-
-                console.log('loading');
             }
         },
 
@@ -149,6 +144,7 @@ define([
                 canvas.width = canvas.clientWidth;
                 canvas.height = canvas.clientHeight;
 
+                this.trigger('resize');
                 this.resizeRTT();
                 this.resizePostprocessing();
             }

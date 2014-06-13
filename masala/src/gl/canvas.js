@@ -11,17 +11,21 @@ define([
     'gl/canvas/postprocessing',
     'gl/canvas/extensions',
     'gl/canvas/extend-context',
+    'gl/canvas/loader',
 
     'utility/debug-output',
 
     'interaction/cursor'
 ], function (namespace, Class, initialize, render, constants, rtt,
-        postprocessing, extensions, extendContext, debugOutput, cursor) {
+        postprocessing, extensions, extendContext, loader, debugOutput,
+        cursor) {
 
     return Class.extend(_.extend({
 
         initialize: function (canvas, config) {
             var context;
+
+            _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
 
@@ -44,11 +48,11 @@ define([
 
             this.initializeExtensions();
 
-            _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
+            if (this.config.preloadAnimation) {
+                this.initializeLoader();
+            }
 
-            this.canvas.addEventListener('click', function () {
-                cursor.requestLock();
-            });
+            this.canvas.addEventListener('click', cursor.requestLock);
         },
 
         setScene: function (scene, beforeFrame) {
@@ -75,6 +79,6 @@ define([
             program.use(this.context);
         }
 
-    }, initialize, render, rtt, postprocessing, extensions));
+    }, initialize, render, rtt, postprocessing, extensions, loader));
 
 });

@@ -9,6 +9,8 @@ define([
     return {
         initializeScene: function (scene) {
 
+            this.trigger('startLoading');
+
             if (scene.isLoaded()) {
                 var context = this.context,
                     sources = scene.sources,
@@ -84,6 +86,8 @@ define([
                 resources.tree = this.initializeNode(sources.tree, resources);
 
                 this.scenes[scene.uid].resources = resources;
+
+                this.trigger('finishLoading');
 
             } else {
                 this.listen(scene, 'loaded', this.initializeScene);

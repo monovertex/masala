@@ -8,7 +8,7 @@ define([
     var Cursor = Class.extend(_.extend({
 
         initialize: function () {
-            _.bindAll(this, 'mouseMove');
+            _.bindAll(this, 'mouseMove', 'requestLock');
 
             document.addEventListener(this.getEventName(), (function () {
                 if (this.isLocked()) {

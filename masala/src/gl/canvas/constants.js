@@ -8,6 +8,29 @@ define([
             'WEBGL_depth_texture'
         ],
         MAX_TEXTURE_UNITS: 16,
+        LOADER: {
+            STYLE: {
+                WRAPPER: {
+                    position: 'absolute',
+                    zIndex: '1000',
+                    backgroundColor: '#222'
+                },
+                INNER: {
+                    width: '30px',
+                    height: '30px',
+                    backgroundColor: '#eee',
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    marginTop: '-15px',
+                    marginLeft: '-15px'
+                }
+            },
+            INTERVAL: 10,
+            SPEED: 1,
+            ROTATION_PROPERTIES: ['webkitTransform', 'mozTransform',
+                'msTransform', 'oTransform', 'transform'],
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',

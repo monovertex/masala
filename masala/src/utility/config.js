@@ -6,7 +6,7 @@ define([
         CANVAS: {
             debug: false,
             backgroundColor: new Color(0, 0, 0),
-            multisampling: 1
+            preloadAnimation: true
         },
 
         SCENE: {

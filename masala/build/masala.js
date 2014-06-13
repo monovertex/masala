@@ -1272,7 +1272,7 @@ modules['interaction/cursor'] = (function (namespace,Class,lock) {
     var Cursor = Class.extend(_.extend({
 
         initialize: function () {
-            _.bindAll(this, 'mouseMove');
+            _.bindAll(this, 'mouseMove', 'requestLock');
 
             document.addEventListener(this.getEventName(), (function () {
                 if (this.isLocked()) {
@@ -1479,6 +1479,8 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
     return {
         initializeScene: function (scene) {
 
+            this.trigger('startLoading');
+
             if (scene.isLoaded()) {
                 var context = this.context,
                     sources = scene.sources,
@@ -1554,6 +1556,8 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                 resources.tree = this.initializeNode(sources.tree, resources);
 
                 this.scenes[scene.uid].resources = resources;
+
+                this.trigger('finishLoading');
 
             } else {
                 this.listen(scene, 'loaded', this.initializeScene);
@@ -1633,6 +1637,29 @@ modules['gl/canvas/constants'] = (function (Vertex) {
             'WEBGL_depth_texture'
         ],
         MAX_TEXTURE_UNITS: 16,
+        LOADER: {
+            STYLE: {
+                WRAPPER: {
+                    position: 'absolute',
+                    zIndex: '1000',
+                    backgroundColor: '#222'
+                },
+                INNER: {
+                    width: '30px',
+                    height: '30px',
+                    backgroundColor: '#eee',
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    marginTop: '-15px',
+                    marginLeft: '-15px'
+                }
+            },
+            INTERVAL: 10,
+            SPEED: 1,
+            ROTATION_PROPERTIES: ['webkitTransform', 'mozTransform',
+                'msTransform', 'oTransform', 'transform'],
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -1810,11 +1837,6 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
                     rtt.mesh.render();
                 }
-            } else {
-                color = this.config.backgroundColor;
-                context.clearColor(color.r, color.g, color.b, 1);
-
-                console.log('loading');
             }
         },
 
@@ -1832,6 +1854,7 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 canvas.width = canvas.clientWidth;
                 canvas.height = canvas.clientHeight;
 
+                this.trigger('resize');
                 this.resizeRTT();
                 this.resizePostprocessing();
             }
@@ -2110,6 +2133,90 @@ modules['gl/canvas/extend-context'] = (function (constants) {
 
 }) (modules['gl/canvas/constants']);
 
+modules['gl/canvas/loader'] = (function (constants) {
+
+    return {
+
+        initializeLoader: function () {
+            if (_.isUndefined(this.loader)) {
+                _.bindAll(this, 'resizeLoader', 'startLoader', 'stopLoader');
+
+                var canvas = this.canvas,
+                    wrapper = document.createElement('div'),
+                    inner = document.createElement('div'),
+                    style = constants.LOADER.STYLE;
+
+                wrapper.style.display = 'none';
+
+                _.each(style.WRAPPER, function (value, property) {
+                    wrapper.style[property] = value;
+                });
+
+                _.each(style.INNER, function (value, property) {
+                    inner.style[property] = value;
+                });
+
+                wrapper.appendChild(inner);
+                document.body.appendChild(wrapper);
+
+                this.loader = wrapper;
+                this.loaderInner = inner;
+                this.loaderRotation = 0;
+
+                this.listen(this, 'resize', this.resizeLoader);
+                this.listen(this, 'startLoading', this.startLoader);
+                this.listen(this, 'finishLoading', this.stopLoader);
+                this.resizeLoader();
+            }
+        },
+
+        resizeLoader: function () {
+            if (!_.isUndefined(this.loader)) {
+                var loader = this.loader,
+                    canvas = this.canvas,
+                    rect = canvas.getBoundingClientRect();
+
+                _.each(rect, function (value, property) {
+                    loader.style[property] = value + 'px';
+                });
+            }
+        },
+
+        startLoader: function () {
+            if (!_.isUndefined(this.loader) &&
+                    _.isUndefined(this.loaderInterval)) {
+
+                this.loader.style.display = 'block';
+
+                this.loaderInterval = root.setInterval((function () {
+                    this.loaderRotation += constants.LOADER.SPEED;
+
+                    _.each(
+                        constants.LOADER.ROTATION_PROPERTIES,
+                        function (property) {
+                            this.loaderInner.style[property] = 'rotate(' +
+                                this.loaderRotation + 'deg)';
+                        },
+                        this
+                    );
+
+                }).bind(this), constants.LOADER.INTERVAL);
+
+            }
+        },
+
+        stopLoader: function () {
+            if (!_.isUndefined(this.loader) &&
+                    !_.isUndefined(this.loaderInterval)) {
+                this.loader.style.display = 'none';
+                root.clearInterval(this.loaderInterval);
+            }
+        }
+
+    };
+
+}) (modules['gl/canvas/constants']);
+
 
 modules['utility/debug-output'] = (function () {
 
@@ -2134,12 +2241,14 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,extendContext,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,extendContext,loader,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
         initialize: function (canvas, config) {
             var context;
+
+            _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
             this.config = _.extend({}, namespace.config.CANVAS, config);
 
@@ -2162,11 +2271,11 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
 
             this.initializeExtensions();
 
-            _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
+            if (this.config.preloadAnimation) {
+                this.initializeLoader();
+            }
 
-            this.canvas.addEventListener('click', function () {
-                cursor.requestLock();
-            });
+            this.canvas.addEventListener('click', cursor.requestLock);
         },
 
         setScene: function (scene, beforeFrame) {
@@ -2193,9 +2302,9 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
             program.use(this.context);
         }
 
-    }, initialize, render, rtt, postprocessing, extensions));
+    }, initialize, render, rtt, postprocessing, extensions, loader));
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['gl/canvas/extend-context'],modules['utility/debug-output'],modules['interaction/cursor']);
+}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['gl/canvas/extend-context'],modules['gl/canvas/loader'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -3030,7 +3139,7 @@ modules['utility/config'] = (function (Color) {
         CANVAS: {
             debug: false,
             backgroundColor: new Color(0, 0, 0),
-            multisampling: 1
+            preloadAnimation: true
         },
 
         SCENE: {
