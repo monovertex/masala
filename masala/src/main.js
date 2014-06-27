@@ -1,29 +1,17 @@
 
 
 define([
-    'utility/namespace',
     'gl/canvas',
-    'utility/scene',
-    'utility/config'
+    'scaffolding/scene'
 ],
-function (namespace, Canvas, Scene, config) {
+function (Canvas, Scene) {
 
-    _.extend(namespace, {
+    return {
 
         Canvas: Canvas,
 
-        Scene: Scene,
+        Scene: Scene
 
-        config: config,
-
-        setCanvasConfig: function (newConfig) {
-            _.merge(namespace.config.CANVAS, newConfig);
-        },
-
-        setSceneConfig: function (newConfig) {
-            _.merge(namespace.config.SCENE, newConfig);
-        }
-
-    });
+    };
 
 });

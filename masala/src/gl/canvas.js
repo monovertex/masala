@@ -1,8 +1,8 @@
 
 
 define([
-    'utility/namespace',
-    'utility/class',
+    'scaffolding/namespace',
+    'scaffolding/class',
 
     'gl/canvas/initialize',
     'gl/canvas/render',
@@ -12,30 +12,33 @@ define([
     'gl/canvas/extensions',
     'gl/canvas/extend-context',
     'gl/canvas/loader',
+    'gl/canvas/fps-counter',
 
     'utility/debug-output',
 
     'interaction/cursor'
 ], function (namespace, Class, initialize, render, constants, rtt,
-        postprocessing, extensions, extendContext, loader, debugOutput,
-        cursor) {
+        postprocessing, extensions, extendContext, loader, fpsCounter,
+        debugOutput, cursor) {
 
     return Class.extend(_.extend({
 
-        initialize: function (canvas, config) {
-            var context;
-
+        initialize: function (attributes, options) {
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
-            this.config = _.extend({}, namespace.config.CANVAS, config);
+            var canvas = this.get('canvas'),
+                context,
+                config = _.merge({}, namespace.config.CANVAS, options);
 
-            this.scenes = {};
+            this.set('config', config)
+                .set('scenes', {})
+                .set('rtt', { initialize: false, enabled: false })
+                .set('postprocessing', { initialize: false, enabled: false });
 
-            this.canvas = canvas;
             context = canvas.getContext('webgl') ||
                 canvas.getContext('experimental-webgl');
 
-            if (this.config.debug) {
+            if (config.debug) {
                 context = WebGLDebugUtils.makeDebugContext(context, undefined,
                     debugOutput);
             }
@@ -44,41 +47,61 @@ define([
 
             extendContext(context);
 
-            this.context = context;
+            this.set('context', context);
 
             this.initializeExtensions();
 
-            if (this.config.preloadAnimation) {
+            if (config.preloadAnimation) {
                 this.initializeLoader();
             }
 
-            this.canvas.addEventListener('click', cursor.requestLock);
+            if (config.fpsCounter) {
+                this.initializeFpsCounter();
+            }
+
+            canvas.addEventListener('click', cursor.requestLock);
         },
 
-        setScene: function (scene, beforeFrame) {
+        setScene: function (scene, callbacks) {
 
-            this.scene = scene;
+            var scenes = this.get('scenes');
 
-            if (_.isUndefined(this.scenes[scene.uid])) {
-                this.scenes[scene.uid] = {};
+            this.set('currentScene', scene);
+
+            if (_.isUndefined(scenes[scene.uid])) {
+                scenes[scene.uid] = { callbacks: {} };
                 this.initializeScene(scene);
             }
 
-            this.scenes[scene.uid].beforeFrame = beforeFrame;
+            _.extend(scenes[scene.uid].callbacks, callbacks);
 
-            this.listen(scene, 'render', this.render);
+            this.listenTo(scene, 'render', this.render);
 
             return this;
         },
 
         useCamera: function (camera) {
-            camera.use(this.context);
+            camera.use(this.get('context'));
         },
 
         useProgram: function (program) {
-            program.use(this.context);
+            program.use(this.get('context'));
         }
 
-    }, initialize, render, rtt, postprocessing, extensions, loader));
+    },
+        initialize,
+        render,
+        rtt,
+        postprocessing,
+        extensions,
+        loader,
+        fpsCounter
+    ), {
+
+        setConfig: function (config) {
+            _.extend(namespace.config.CANVAS, config);
+        }
+
+    });
 
 });

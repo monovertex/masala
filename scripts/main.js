@@ -15,8 +15,10 @@
 
 // scene.startRendering();
 
-var scene = new Masala.Scene('/masala/examples/1.json'),
-    canvasLeft = new Masala.Canvas(document.getElementById('canvas-left'));
+var scene = new Masala.Scene({ source: '/masala/examples/1.json' }),
+    canvasLeft = new Masala.Canvas({
+        canvas: document.getElementById('canvas-left')
+    });
 
 canvasLeft.setScene(scene);
 

@@ -6,10 +6,10 @@ define([
     return {
 
         initializeLoader: function () {
-            if (_.isUndefined(this.loader)) {
+            if (_.isUndefined(this.get('loader'))) {
                 _.bindAll(this, 'resizeLoader', 'startLoader', 'stopLoader');
 
-                var canvas = this.canvas,
+                var canvas = this.get('canvas'),
                     wrapper = document.createElement('div'),
                     inner = document.createElement('div'),
                     style = constants.LOADER.STYLE;
@@ -27,22 +27,22 @@ define([
                 wrapper.appendChild(inner);
                 document.body.appendChild(wrapper);
 
-                this.loader = wrapper;
-                this.loaderInner = inner;
-                this.loaderRotation = 0;
+                this.set('loader', wrapper);
+                this.set('loaderInner', inner);
+                this.set('loaderRotation', 0);
 
-                this.listen(this, 'resize', this.resizeLoader);
-                this.listen(this, 'startLoading', this.startLoader);
-                this.listen(this, 'finishLoading', this.stopLoader);
+                this.listenTo(this, 'resize', this.resizeLoader);
+                this.listenTo(this, 'startLoading', this.startLoader);
+                this.listenTo(this, 'finishLoading', this.stopLoader);
                 this.resizeLoader();
             }
         },
 
         resizeLoader: function () {
-            if (!_.isUndefined(this.loader)) {
-                var loader = this.loader,
-                    canvas = this.canvas,
-                    rect = canvas.getBoundingClientRect();
+            var loader = this.get('loader');
+
+            if (!_.isUndefined(loader)) {
+                var rect = this.get('canvas').getBoundingClientRect();
 
                 _.each(rect, function (value, property) {
                     loader.style[property] = value + 'px';
@@ -51,33 +51,43 @@ define([
         },
 
         startLoader: function () {
-            if (!_.isUndefined(this.loader) &&
-                    _.isUndefined(this.loaderInterval)) {
+            var loader = this.get('loader'),
+                loaderInterval = this.get('loaderInterval');
 
-                this.loader.style.display = 'block';
+            if (!_.isUndefined(loader) && _.isUndefined(loaderInterval)) {
+                var loaderInner = this.get('loaderInner');
 
-                this.loaderInterval = root.setInterval((function () {
-                    this.loaderRotation += constants.LOADER.SPEED;
+                loader.style.display = 'block';
+
+                loaderInterval = root.setInterval((function () {
+                    var loaderRotation = this.get('loaderRotation') +
+                        constants.LOADER.SPEED;
+
+                    this.set('loaderRotation', loaderRotation);
 
                     _.each(
                         constants.LOADER.ROTATION_PROPERTIES,
                         function (property) {
-                            this.loaderInner.style[property] = 'rotate(' +
-                                this.loaderRotation + 'deg)';
+                            loaderInner.style[property] = 'rotate(' +
+                                loaderRotation + 'deg)';
                         },
                         this
                     );
 
                 }).bind(this), constants.LOADER.INTERVAL);
 
+                this.set('loaderInterval', loaderInterval);
             }
         },
 
         stopLoader: function () {
-            if (!_.isUndefined(this.loader) &&
-                    !_.isUndefined(this.loaderInterval)) {
-                this.loader.style.display = 'none';
-                root.clearInterval(this.loaderInterval);
+            var loader = this.get('loader'),
+                loaderInterval = this.get('loaderInterval');
+
+            if (!_.isUndefined(loader) && !_.isUndefined(loaderInterval)) {
+                loader.style.display = 'none';
+                root.clearInterval(loaderInterval);
+                this.set('loaderInterval');
             }
         }
 

@@ -2,28 +2,23 @@
 
 define([
     'shading/constants',
-    'utility/class',
+    'scaffolding/class',
     'utility/color'
 ], function (constants, Class, Color) {
 
     return Class.extend({
 
-        initialize: function (options) {
-            this.color = new Color(options.color);
-            this.radius = options.radius;
+        attributeTypes: {
+            'color': 'color'
         },
 
         output: function () {
             return {
-                position: this.node.position,
+                position: this.get('node').get('position'),
                 type: constants.TYPE_RAW.POINT,
-                color: this.color,
-                radius: this.radius
+                color: this.get('color'),
+                radius: this.get('radius')
             };
-        },
-
-        setNode: function (node) {
-            this.node = node;
         }
 
     });

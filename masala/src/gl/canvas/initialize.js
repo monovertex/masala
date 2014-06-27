@@ -7,13 +7,14 @@ define([
 ], function (Program, Texture, Mesh, Camera) {
 
     return {
-        initializeScene: function (scene) {
+        initializeScene: function (ev) {
+            var scene = ev.source || ev;
 
             this.trigger('startLoading');
 
             if (scene.isLoaded()) {
-                var context = this.context,
-                    sources = scene.sources,
+                var context = this.get('context'),
+                    sources = scene.get('sources'),
                     resources = {
                         ambientLight: sources.ambientLight,
                         backgroundColor: sources.backgroundColor,
@@ -39,11 +40,12 @@ define([
                 // Programs.
                 _.each(sources.programs, function (source, key) {
                     resources.programs[key] = new Program(
-                        context,
-                        _.reduce(source, function (result, path, key) {
-                            result[key] = sources.shaders[path];
-                            return result;
-                        }, {})
+                        { context: context },
+                        { sources:
+                            _.reduce(source, function (result, path, key) {
+                                result[key] = sources.shaders[path];
+                                return result;
+                            }, {}) }
                     );
                 }, this);
 
@@ -64,7 +66,10 @@ define([
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
-                    resources.allMeshes[key] = new Mesh(context, source);
+                    resources.allMeshes[key] = new Mesh(
+                        { context: context },
+                        { source: source }
+                    );
                 }, this);
 
                 _.each(sources.meshNames, function (path, name) {
@@ -75,7 +80,8 @@ define([
                 _.each(sources.textureOptions, function (options, index) {
                     options.source = sources.textureSources[options.path];
 
-                    resources.allTextures.push(new Texture(options, context));
+                    resources.allTextures.push(new Texture({ context: context },
+                        options));
 
                     if (!_.isUndefined(options.name)) {
                         resources.textures[options.name] =
@@ -85,12 +91,12 @@ define([
 
                 resources.tree = this.initializeNode(sources.tree, resources);
 
-                this.scenes[scene.uid].resources = resources;
+                this.get('scenes')[scene.uid].resources = resources;
 
                 this.trigger('finishLoading');
 
             } else {
-                this.listen(scene, 'loaded', this.initializeScene);
+                this.listenTo(scene, 'loaded', this.initializeScene);
             }
 
         },

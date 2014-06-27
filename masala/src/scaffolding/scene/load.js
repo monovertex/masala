@@ -5,7 +5,7 @@ define([
     'geometry/constants',
     'shading/constants',
 
-    'utility/node',
+    'scaffolding/node',
     'interaction/actor',
     'interaction/camera',
     'shading/point',
@@ -18,7 +18,9 @@ define([
     return {
 
         load: function (schema) {
-            var parsedSchema, sources;
+            var parsedSchema, sources,
+                resourceCount = 0,
+                config = this.get('config');
 
             sources = {
                 meshNames: schema.meshes,
@@ -48,7 +50,7 @@ define([
 
                 tree: []
             };
-            this.sources = sources;
+            this.set('sources', sources);
 
             // Grab resource information.
             parsedSchema = {
@@ -56,7 +58,7 @@ define([
                 texturePaths: [],
                 shaderPaths: []
             };
-            this.parsedSchema = parsedSchema;
+            this.set('parsedSchema', parsedSchema);
 
             // Postprocessing.
             if (!_.isUndefined(schema.postprocessing)) {
@@ -95,7 +97,7 @@ define([
 
                     if (_.isPlainObject(options)) {
                         _.each(options, function (path, key) {
-                            options[key] = this.config.paths.shaders + path;
+                            options[key] = config.paths.shaders + path;
                         }, this);
 
                         schema.programs[name] = options;
@@ -110,8 +112,6 @@ define([
                     });
                 }
             }, this);
-
-
 
             // Meshes.
             _.each(schema.meshes, function (path) {
@@ -139,11 +139,10 @@ define([
             _.each(schema.tree, this.parseNode, this);
 
             // Instantiate async resources.
-            this.resourceCount = 0;
-
-            this.resourceCount += parsedSchema.shaderPaths.length;
-            this.resourceCount += parsedSchema.meshPaths.length;
-            this.resourceCount += parsedSchema.texturePaths.length;
+            resourceCount += parsedSchema.shaderPaths.length;
+            resourceCount += parsedSchema.meshPaths.length;
+            resourceCount += parsedSchema.texturePaths.length;
+            this.set('resourceCount', resourceCount);
 
             this.loadAsyncResources(parsedSchema.shaderPaths, this.loadShader);
             this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
@@ -151,20 +150,20 @@ define([
                 this.loadTexture);
 
             // Global material constants.
-            this.sources.ambientLight = new Color(schema.ambientLight);
+            sources.ambientLight = new Color(schema.ambientLight);
 
-            if (!_.isUndefined(schema.backgroundColor))
-                this.sources.backgroundColor =
-                    new Color(schema.backgroundColor);
+            if (!_.isUndefined(schema.backgroundColor)) {
+                sources.backgroundColor = new Color(schema.backgroundColor);
+            }
 
             // Instantiate tree.
-            this.sources.tree = {
-                object: new Node({}),
+            sources.tree = {
+                object: new Node(),
                 children: []
             };
 
             _.each(schema.tree, function (node) {
-                this.instantiateNode(this.sources.tree, node);
+                this.instantiateNode(sources.tree, node);
             }, this);
         },
 
@@ -183,13 +182,16 @@ define([
         },
 
         parseNode: function (node) {
+            var sources = this.get('sources'),
+                parsedSchema = this.get('parsedSchema');
+
             if (!_.isUndefined(node.mesh) && _.isString(node.mesh)) {
-                if (node.mesh in this.sources.meshNames) {
-                    node.mesh = this.sources.meshNames[node.mesh];
+                if (node.mesh in sources.meshNames) {
+                    node.mesh = sources.meshNames[node.mesh];
                 } else {
-                    if (_.indexOf(this.parsedSchema.meshPaths,
+                    if (_.indexOf(parsedSchema.meshPaths,
                             node.mesh) === -1) {
-                        this.parsedSchema.meshPaths.push(node.mesh);
+                        parsedSchema.meshPaths.push(node.mesh);
                     }
                 }
             }
@@ -217,18 +219,19 @@ define([
         },
 
         parseTexture: function (options) {
-            if (_.isString(options) &&
-                    options in this.sources.textureNames) {
-                return this.sources.textureNames[options];
-            } else if (_.isPlainObject(options)) {
-                this.sources.textureOptions.push(options);
+            var sources = this.get('sources'),
+                parsedSchema = this.get('parsedSchema');
 
-                if (_.indexOf(this.parsedSchema.texturePaths,
-                        options.path) === -1) {
-                    this.parsedSchema.texturePaths.push(options.path);
+            if (_.isString(options) && options in sources.textureNames) {
+                return sources.textureNames[options];
+            } else if (_.isPlainObject(options)) {
+                sources.textureOptions.push(options);
+
+                if (_.indexOf(parsedSchema.texturePaths, options.path) === -1) {
+                    parsedSchema.texturePaths.push(options.path);
                 }
 
-                return this.parsedSchema.texturePaths.length - 1;
+                return parsedSchema.texturePaths.length - 1;
             }
         },
 
@@ -244,7 +247,7 @@ define([
                     break;
             }
 
-            this.sources.lights.push(light);
+            this.get('sources.lights').push(light);
 
             return light;
         },
@@ -254,7 +257,9 @@ define([
                     name: options.name,
                     children: []
                 },
-                light;
+                light,
+                sources = this.get('sources'),
+                children = options.children;
 
             // Set mesh.
             if (!_.isUndefined(options.mesh)) {
@@ -264,7 +269,7 @@ define([
                 if (!_.isUndefined(options.material)) {
                     options.material = this.instantiateNodeProperty(
                         options.material,
-                        this.sources.materials,
+                        sources.materials,
                         function (options) { return options; },
                         function (options) {
                             return new Material(options);
@@ -279,40 +284,42 @@ define([
 
             // Instantiate actor.
             options.actor = this.instantiateNodeProperty(options.actor,
-                this.sources.actorOptions, function (options) {
+                sources.actorOptions, function (options) {
                     var actor = new Actor(options);
 
-                    this.sources.actors.push(actor);
+                    sources.actors.push(actor);
 
                     return actor;
                 });
 
             // Instantiate camera.
             options.camera = this.instantiateNodeProperty(options.camera,
-                this.sources.cameraOptions, function (options) {
+                sources.cameraOptions, function (options) {
                     var camera = new Camera(options);
 
-                    this.sources.cameras.push(camera);
+                    sources.cameras.push(camera);
                     if (options.default) {
-                        this.sources.defaultCamera = camera;
+                        sources.defaultCamera = camera;
                     }
 
                     return camera;
                 });
+
+            delete options.children;
 
             // Instantiate node.
             node.object = new Node(options);
 
             // Instantiate light.
             light = this.instantiateNodeProperty(options.light,
-                this.sources.lightOptions, this.instantiateLight);
+                sources.lightOptions, this.instantiateLight);
 
             if (!_.isUndefined(light)) {
-                light.setNode(node.object);
+                light.set('node', node.object);
             }
 
-            if (!_.isUndefined(options.children) && _.isArray(options.children)) {
-                _.each(options.children, function (child) {
+            if (!_.isUndefined(children) && _.isArray(children)) {
+                _.each(children, function (child) {
                     this.instantiateNode(node, child);
                 }, this);
             }
@@ -337,11 +344,15 @@ define([
         },
 
         resourceLoaded: function () {
-            this.resourceCount--;
+            var resourceCount = this.get('resourceCount');
 
-            if (this.resourceCount <= 0) {
-                this.loading = false;
+            resourceCount--;
+
+            if (resourceCount <= 0) {
+                this.set('loading', false);
                 this.trigger('loaded');
+            } else {
+                this.set('resourceCount', resourceCount);
             }
         },
 
@@ -354,7 +365,7 @@ define([
 
         loadShader: function (path) {
             loadFile(path, (function (source) {
-                this.sources.shaders[path] = source;
+                this.get('sources.shaders')[path] = source;
                 this.resourceLoaded();
             }).bind(this));
         },
@@ -366,13 +377,13 @@ define([
                 var splitPath = options.source.split('.');
 
                 if (splitPath[1] in geometryConstants.MESHES) {
-                    path = this.config.paths.meshes +
+                    path = this.get('config.paths.meshes') +
                         geometryConstants.MESHES[splitPath[1]];
                 }
             }
 
             loadFile(path, (function (source) {
-                this.sources.meshSources[originalPath] = source;
+                this.get('sources.meshSources')[originalPath] = source;
                 this.resourceLoaded();
             }).bind(this));
         },
@@ -381,7 +392,7 @@ define([
             var image = new Image();
 
             image.addEventListener('load', (function () {
-                this.sources.textureSources[path] = image;
+                this.get('sources.textureSources')[path] = image;
                 this.resourceLoaded();
             }).bind(this));
 

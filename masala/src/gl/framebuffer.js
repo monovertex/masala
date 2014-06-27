@@ -1,54 +1,52 @@
 
 define([
-    'utility/class'
+    'scaffolding/class'
 ], function (Class) {
 
     return Class.extend({
 
-        initialize: function (context) {
-            var framebuffer = context.createFramebuffer();
-
-            this.framebuffer = framebuffer;
-            this.context = context;
+        initialize: function () {
+            this.set('fbo', this.get('context').createFramebuffer());
         },
 
         bind: function () {
-            this.context.bindFramebuffer(this.context.FRAMEBUFFER,
-                this.framebuffer);
+            var context = this.get('context');
+
+            context.bindFramebuffer(context.FRAMEBUFFER, this.get('fbo'));
         },
 
         unbind: function () {
-            this.context.bindFramebuffer(this.context.FRAMEBUFFER, null);
+            var context = this.get('context');
+
+            context.bindFramebuffer(context.FRAMEBUFFER, null);
         },
 
         attachTexture: function (texture, attachment) {
+            var context = this.get('context');
+
             this.bind();
 
-            this.context.framebufferTexture2D(this.context.FRAMEBUFFER,
-                attachment, this.context.TEXTURE_2D, texture, 0);
+            context.framebufferTexture2D(context.FRAMEBUFFER,
+                attachment, context.TEXTURE_2D, texture, 0);
 
             this.unbind();
         },
 
         attachColorTexture: function (texture) {
-            this.attachTexture(texture.texture, this.context.COLOR_ATTACHMENT0);
+            this.attachTexture(texture.get('texture'),
+                this.get('context').COLOR_ATTACHMENT0);
         },
 
         attachDepthTexture: function (texture) {
-            this.attachTexture(texture.texture, this.context.DEPTH_ATTACHMENT);
+            this.attachTexture(texture.get('texture'),
+                this.get('context').DEPTH_ATTACHMENT);
         },
 
         attachDepthBuffer: function (buffer) {
-            this.bind();
+            var context = this.get('context');
 
-            this.context.framebufferRenderbuffer(
-                this.context.FRAMEBUFFER,
-                this.context.DEPTH_ATTACHMENT,
-                this.context.RENDERBUFFER,
-                buffer
-            );
-
-            this.unbind();
+            context.framebufferRenderbuffer(context.FRAMEBUFFER,
+                context.DEPTH_ATTACHMENT, context.RENDERBUFFER, buffer);
         }
 
     });

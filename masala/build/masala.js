@@ -3,93 +3,351 @@
 
     if (typeof define === 'function' && define.amd) {
         define(
-            ['lodash', 'gl-matrix', 'keypress', 'webgl-debug'],
+            ['lodash', 'gl-matrix', 'keypress', 'simplex-noise', 'webgl-debug'],
             function(_, glm, keypress) {
-                factory(root, _, glm, keypress, root.WebGLDebugUtils);
-
-                return root.Masala;
+                return factory(root, _, glm, keypress, SimplexNoise,
+                    root.WebGLDebugUtils);
             }
         );
     } else {
-        factory(root, root._, root, root.keypress, root.WebGLDebugUtils);
+        root.Masala = factory(root, root._, root, root.keypress,
+            root.SimplexNoise, root.WebGLDebugUtils);
     }
 
-}) (this, function(root, _, glm, keypress, WebGLDebugUtils) {
+}) (this, function(root, _, glm, keypress, SimplexNoise, WebGLDebugUtils) {
 
     var modules = {};
 
-modules['utility/namespace'] = (function () {
 
-    return root.Masala || (root.Masala = {});
+modules['utility/color'] = (function () {
+
+    return function () {
+        if (arguments.length === 3) {
+            this.r = arguments[0] || 0;
+            this.g = arguments[1] || 0;
+            this.b = arguments[2] || 0;
+        } else if (_.isPlainObject(arguments[0])) {
+            this.r = arguments[0].r || 0;
+            this.g = arguments[0].g || 0;
+            this.b = arguments[0].b || 0;
+        }
+
+        this.flatten = function () {
+            return [this.r, this.g, this.b];
+        };
+    };
+
+}) ();
+
+modules['utility/config'] = (function (Color) {
+
+    return {
+        CANVAS: {
+            debug: false,
+            backgroundColor: new Color({ r: 0, b: 0, g: 0 }),
+            preloadAnimation: true,
+            fpsCounter: true
+        },
+
+        SCENE: {
+            paths: {
+                meshes: '/masala/meshes/',
+                shaders: '/masala/shaders/'
+            }
+        }
+    };
+}) (modules['utility/color']);
+
+modules['scaffolding/namespace'] = (function (config) {
+
+    return {
+        config: config
+    };
+
+}) (modules['utility/config']);
+
+modules['utility/event'] = (function () {
+
+    return function (source, eventName, data) {
+        this.name = eventName;
+        this.data = data;
+        this.source = source;
+    };
+
+}) ();
+
+modules['scaffolding/class/events'] = (function (Event) {
+
+    return {
+
+        listenTo: function (object, eventName, callback) {
+            if (_.isUndefined(object.eventListeners)) {
+                object.eventListeners = {};
+            }
+
+            if (_.isUndefined(this.listeningTo)) {
+                this.listeningTo = [];
+            }
+
+            if (_.isUndefined(object.eventListeners[eventName])) {
+                object.eventListeners[eventName] = {};
+            }
+
+            if (_.isUndefined(object.eventListeners[eventName][this.uid])) {
+                object.eventListeners[eventName][this.uid] = [];
+                this.listeningTo.push(object.eventListeners[eventName]);
+            }
+
+            object.eventListeners[eventName][this.uid].push(callback);
+
+            return this;
+        },
+
+        trigger: function (eventName, data) {
+            if (!_.isUndefined(this.eventListeners)) {
+                var event = new Event(this, eventName, data);
+
+                if (eventName in this.eventListeners) {
+                    _.each(
+                        this.eventListeners[eventName],
+                        function (listeners) {
+                            _.each(listeners, function (callback) {
+                                if (_.isFunction(callback)) {
+                                    callback(event);
+                                }
+                            }, this);
+                        },
+                        this
+                    );
+                }
+            }
+
+            return this;
+        },
+
+        stopListeningTo: function (object, eventName, callback) {
+            if (!_.isUndefined(object) &&
+                    !_.isUndefined(object.eventListeners)) {
+                if (_.isUndefined(eventName)) {
+                    _.each(object.eventListeners, function (listeners) {
+                        delete listeners[this.uid];
+                    }, this);
+                } else if (!_.isUndefined(object.eventListeners[eventName])) {
+                    if (_.isUndefined(callback)) {
+                        delete object.eventListeners[eventName][this.uid];
+                    } else {
+                        if (!_.isUndefined(
+                                object.eventListeners[eventName][this.uid])) {
+                            object.eventListeners[eventName][this.uid] =
+                                _.without(
+                                    object.eventListeners[eventName][this.uid],
+                                    callback
+                                );
+                        }
+                    }
+                }
+            }
+
+            return this;
+        },
+
+        stopListening: function () {
+            if (!_.isUndefined(this.listeningTo)) {
+                _.each(this.listeningTo, function (listeners) {
+                    delete listeners[this.uid];
+                }, this);
+            }
+        }
+
+    };
+
+}) (modules['utility/event']);
+
+modules['utility/is-any-array'] = (function () {
+
+    return function (obj) {
+        return Object.prototype.toString.call(obj).indexOf('Array') !== -1;
+    };
 
 }) ();
 
 
-modules['utility/class'] = (function () {
+modules['utility/error'] = (function () {
 
-    var uid = 0,
-        Class = function () {
-            this.uid = uid++;
+    return function (message) {
+        throw('Masala: ' + message + '!');
+    };
 
-            if (this.initialize) {
+}) ();
+
+
+modules['scaffolding/class/attributes'] = (function (isAnyArray,error,Color) {
+
+    function valueChoice(a, b, c) {
+        return (_.isUndefined(a) ? (_.isUndefined(b) ? c : b) : a);
+    }
+
+    var parsers = {
+        number: function (value) {
+            if (!_.isUndefined(value) && _.isNumber(value)) {
+                return value;
+            }
+            error('attribute should be a number (' + value + ')');
+        },
+        xyz: function (value, previous) {
+            if (!_.isUndefined(value)) {
+                if (_.isPlainObject(value)) {
+                    return {
+                        x: valueChoice(value.x, previous ? previous.x : 0, 0),
+                        y: valueChoice(value.y, previous ? previous.y : 0, 0),
+                        z: valueChoice(value.z, previous ? previous.z : 0, 0)
+                    };
+                } else if (isAnyArray(value) && value.length === 3) {
+                    return {
+                        x: valueChoice(value[0], previous ? previous.x : 0, 0),
+                        y: valueChoice(value[1], previous ? previous.y : 0, 0),
+                        z: valueChoice(value[2], previous ? previous.z : 0, 0)
+                    };
+                } else {
+                    return {
+                        x: valueChoice(value, previous ? previous.x : 0, 0),
+                        y: valueChoice(value, previous ? previous.y : 0, 0),
+                        z: valueChoice(value, previous ? previous.z : 0, 0)
+                    };
+                }
+            }
+            error('incorrect xyz format (' + value + ')');
+        },
+        xy: function (value, previous) {
+            if (!_.isUndefined(value)) {
+                if (_.isPlainObject(value)) {
+                    return {
+                        x: valueChoice(value.x, previous ? previous.x : 0, 0),
+                        y: valueChoice(value.y, previous ? previous.y : 0, 0)
+                    };
+                } else if (isAnyArray(value) && value.length === 2) {
+                    return {
+                        x: valueChoice(value[0], previous ? previous.x : 0, 0),
+                        y: valueChoice(value[1], previous ? previous.y : 0, 0)
+                    };
+                } else {
+                    return {
+                        x: valueChoice(value, previous ? previous.x : 0, 0),
+                        y: valueChoice(value, previous ? previous.y : 0, 0)
+                    };
+                }
+            }
+            error('incorrect xy format (' + value + ')');
+        },
+        vec3: function (value, previous) {
+            if (!_.isUndefined(value)) {
+                if (_.isPlainObject(value)) {
+                    return glm.vec3.fromValues(
+                        root.parseFloat(valueChoice(value.x,
+                            previous ? previous[0] : 0, 0)),
+                        root.parseFloat(valueChoice(value.y,
+                            previous ? previous[1] : 0, 0)),
+                        root.parseFloat(valueChoice(value.z,
+                            previous ? previous[2] : 0, 0))
+                    );
+                } else if (isAnyArray(value) && value.length === 3) {
+                    return value;
+                }
+            }
+            error('incorrect vec3 format (' + value + ')');
+        },
+        color: function (value) {
+            if (!_.isUndefined(value)) {
+                if ('r' in value && 'g' in value && 'b' in value) {
+                    return new Color(value);
+                }
+            }
+            error('incorrect color format (' + value + ')');
+        }
+    };
+
+    return {
+
+        set: function (key, value) {
+            if (_.isUndefined(this.attributes)) {
+                this.attributes = {};
+            }
+
+            if (!_.isUndefined(this.attributeTypes) &&
+                    key in this.attributeTypes &&
+                    this.attributeTypes[key] in parsers) {
+                // if (key === 'rotationSensitivity') {
+                //     console.log(value, this.get);
+                // }
+                value = parsers[this.attributeTypes[key]](value,
+                    this.get(key));
+            }
+
+            this.setChainAttribute(this.attributes, key.split('.'), value);
+
+            return this;
+        },
+
+        setChainAttribute: function (target, chain, value) {
+            var first = _.first(chain);
+
+            if (chain.length === 1) {
+                target[first] = value;
+            } else {
+                if (_.isUndefined(target[first])) {
+                    target[first] = {};
+                }
+
+                this.setChainAttribute(target[first], _.rest(chain), value);
+            }
+        },
+
+        get: function (key) {
+            if (!_.isUndefined(this.attributes)) {
+                return this.getChainAttribute(this.attributes, key.split('.'));
+            }
+        },
+
+        getChainAttribute: function (target, chain) {
+            var first = _.first(chain);
+
+            if (chain.length === 1) {
+                return target[first];
+            } else {
+                if (!_.isUndefined(target[first])) {
+                    return this.getChainAttribute(target[first], _.rest(chain));
+                }
+            }
+        }
+
+    };
+
+}) (modules['utility/is-any-array'],modules['utility/error'],modules['utility/color']);
+
+
+modules['scaffolding/class'] = (function (events,attributes) {
+
+    var Class = function (attributes) {
+            this.uid = _.uniqueId();
+
+            if (!_.isUndefined(this.defaults) &&
+                    _.isPlainObject(this.defaults)) {
+                _.each(this.defaults, function (attribute, key) {
+                    this.set(key, _.cloneDeep(attribute));
+                }, this);
+            }
+
+            _.each(attributes, function (attribute, key) {
+                this.set(key, attribute);
+            }, this);
+
+            if (!_.isUndefined(this.initialize) &&
+                    _.isFunction(this.initialize)) {
                 this.initialize.apply(this, arguments);
             }
         };
 
-    _.extend(Class.prototype, {
-        listeners: {},
-
-        listen: function (object, eventName, callback) {
-            if (!_.isUndefined(object.listeners)) {
-                if (_.isUndefined(object.listeners[eventName])) {
-                    object.listeners[eventName] = {};
-                }
-
-                if (_.isUndefined(object.listeners[eventName][this._uid])) {
-                    object.listeners[eventName][this.uid] = [];
-                }
-
-                object.listeners[eventName][this.uid].push(callback);
-            }
-        },
-
-        trigger: function (eventName, data) {
-            if (eventName in this.listeners) {
-                _.each(this.listeners[eventName], function (listener) {
-                    _.each(listener, function (callback) {
-                        if (_.isFunction(callback)) {
-                            callback(this, eventName, data);
-                        }
-                    }, this);
-                }, this);
-            }
-        },
-
-        delegate: function (model, functionName) {
-            this[functionName] = function () {
-                return model[functionName](arguments);
-            };
-        },
-
-        delegateEvent: function (model, eventName) {
-            this.listen(model, eventName, (function () {
-                this.trigger(eventName);
-            }).bind(this));
-        },
-
-        listenToKey: function (key, keyDownCallback, keyUpCallback) {
-            if (_.isUndefined(this.keyListener)) {
-                this.keyListener = new keypress.Listener();
-            }
-
-            this.keyListener.register_combo({
-                keys: key,
-                on_keyup: keyUpCallback,
-                on_keydown: keyDownCallback,
-                prevent_repeat: false
-            });
-        }
-    });
+    _.extend(Class.prototype, events, attributes);
 
     Class.extend = function (properties, staticProperties) {
         var parent = this,
@@ -98,24 +356,22 @@ modules['utility/class'] = (function () {
 
         child = function () { return parent.apply(this, arguments); };
 
-        _.extend(child, parent, staticProperties);
+        _.merge(child, parent, staticProperties);
 
         Surrogate = function () { this.constructor = child; };
         Surrogate.prototype = parent.prototype;
         child.prototype = new Surrogate();
 
         if (properties) {
-            _.extend(child.prototype, properties);
+            _.merge(child.prototype, properties);
         }
-
-        child.__super__ = parent.prototype;
 
         return child;
     };
 
     return Class;
 
-}) ();
+}) (modules['scaffolding/class/events'],modules['scaffolding/class/attributes']);
 
 modules['gl/program/constants'] = {
     TYPE: {
@@ -183,10 +439,13 @@ modules['gl/program'] = (function (Class,programConstants) {
 
     return Class.extend({
 
-        initialize: function (context, sources) {
-            var program = context.createProgram();
+        initialize: function (attributes, options) {
+            var context = this.get('context'),
+                program = context.createProgram();
 
-            _.each(sources, function(source, type) {
+            _.bindAll(this, 'getUniformLoc', 'getAttribLoc', 'use');
+
+            _.each(options.sources, function(source, type) {
                 var shader;
 
                 if (type === programConstants.TYPE.FRAGMENT) {
@@ -216,57 +475,60 @@ modules['gl/program'] = (function (Class,programConstants) {
                     context.getProgramInfoLog(program));
             }
 
-            this.context = context;
-            this.program = program;
-            this.uniforms = {};
-            this.attributes = {};
-
-            _.bindAll(this, 'getUniformLoc', 'getAttribLoc', 'use');
+            this.set('program', program)
+                .set('uniforms', {})
+                .set('attributes', {});
         },
 
         getUniformLoc: function (uniform) {
-            var context = this.context;
+            var context = this.get('context'),
+                uniforms = this.get('uniforms'),
+                program = this.get('program');
 
-            if (_.isUndefined(this.uniforms[uniform])) {
-                this.uniforms[uniform] = context.getUniformLocation(
-                    this.program, uniform);
+            if (_.isUndefined(uniforms[uniform])) {
+                uniforms[uniform] = context.getUniformLocation(program,
+                    uniform);
             }
 
-            return this.uniforms[uniform];
+            return uniforms[uniform];
         },
 
         getAttribLoc: function (attribute) {
-            var context = this.context;
+            var context = this.get('context'),
+                attributes = this.get('attributes'),
+                program = this.get('program');
 
-            if (_.isUndefined(this.attributes[attribute])) {
-                this.attributes[attribute] = context.getAttribLocation(
-                    this.program, attribute);
+            if (_.isUndefined(attributes[attribute])) {
+                attributes[attribute] = context.getAttribLocation(program,
+                    attribute);
 
-                if (this.attributes[attribute] > 0 ||
-                        this.attributes[attribute] === 0) {
-                    context.enableVertexAttribArray(this.attributes[attribute]);
+                if (attributes[attribute] > 0 || attributes[attribute] === 0) {
+                    context.enableVertexAttribArray(attributes[attribute]);
                 }
             }
 
-            return this.attributes[attribute];
+            return attributes[attribute];
         },
 
-        use: function (attribute) {
-            this.context.useProgram(this.program);
-            this.context._currentProgram = this;
+        use: function () {
+            var context = this.get('context');
+
+            context.useProgram(this.get('program'));
+            context._currentProgram = this;
         }
 
     });
 
-}) (modules['utility/class'],modules['gl/program/constants']);
+}) (modules['scaffolding/class'],modules['gl/program/constants']);
 
 
 modules['gl/texture'] = (function (Class) {
 
     return Class.extend({
 
-        initialize: function (options, context) {
-            var texture = context.createTexture(),
+        initialize: function (attributes, options) {
+            var context = this.get('context'),
+                texture = context.createTexture(),
                 wrapS = 'REPEAT',
                 wrapT = 'REPEAT',
                 filterMag = 'NEAREST',
@@ -345,8 +607,8 @@ modules['gl/texture'] = (function (Class) {
                     options.source
                 );
 
-                this.width = options.width;
-                this.height = options.height;
+                this.set('width', options.width);
+                this.set('height', options.height);
 
             } else if (options.source instanceof Image) {
                 context.texImage2D(
@@ -363,22 +625,25 @@ modules['gl/texture'] = (function (Class) {
                 context.generateMipmap(context.TEXTURE_2D);
             }
 
-            this.texture = texture;
-            this.context = context;
+            this.set('texture', texture);
 
             this.unbind();
         },
 
         bind: function () {
-            this.context.bindTexture(this.context.TEXTURE_2D, this.texture);
+            var context = this.get('context');
+
+            context.bindTexture(context.TEXTURE_2D, this.get('texture'));
         },
 
         unbind: function () {
-            this.context.bindTexture(this.context.TEXTURE_2D, null);
+            var context = this.get('context');
+
+            context.bindTexture(context.TEXTURE_2D, null);
         },
 
         render: function (unit, uniformName) {
-            var context = this.context,
+            var context = this.get('context'),
                 program = context._currentProgram;
 
             context.activeTexture(context.TEXTURE0 + unit);
@@ -391,7 +656,7 @@ modules['gl/texture'] = (function (Class) {
 
     });
 
-}) (modules['utility/class']);
+}) (modules['scaffolding/class']);
 
 modules['utility/constants'] = {
     SIZE: {
@@ -439,60 +704,76 @@ modules['geometry/vertex'] = (function (Class) {
 
     return Class.extend({
 
-        initialize: function () {
-            var source;
-
-            if (arguments.length === 1) {
-                source = arguments[0];
-            } else {
-                source = arguments;
+        set: function (key, value) {
+            switch (key) {
+                case 'position':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec3.fromValues(value.x, value.y, value.z);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec3.fromValues(value[0], value[1],
+                            value[2]);
+                    }
+                    break;
+                case 'normal':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec3.fromValues(value.x, value.y, value.z);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec3.fromValues(value[0], value[1],
+                            value[2]);
+                    }
+                    glm.vec3.normalize(value, value);
+                    break;
+                case 'texCoords':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec2.fromValues(value.x, value.y);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec2.fromValues(value[0], value[1]);
+                    }
+                    break;
             }
 
-            this.px = source[0] || 0;
-            this.py = source[1] || 0;
-            this.pz = source[2] || 0;
+            Class.prototype.set.call(this, key, value);
+        },
 
-            this.nx = source[3] || 0;
-            this.ny = source[4] || 0;
-            this.nz = source[5] || 0;
+        get: function (key) {
+            var value = Class.prototype.get.call(this, key);
 
-            this.tx = source[6] || 0;
-            this.ty = source[7] || 0;
-
-            this.px = parseFloat(this.px);
-            this.py = parseFloat(this.py);
-            this.pz = parseFloat(this.pz);
-
-            this.nx = parseFloat(this.nx);
-            this.ny = parseFloat(this.ny);
-            this.nz = parseFloat(this.nz);
-
-            this.tx = parseFloat(this.tx);
-            this.ty = parseFloat(this.ty);
-
-            if (this.nx !== 0 || this.ny !== 0 || this.nz !== 0) {
-                var normal = glm.vec3.create(),
-                    normalizedNormal = glm.vec3.create();
-                glm.vec3.set(normal, this.nx, this.ny, this.nz);
-                glm.vec3.normalize(normalizedNormal, normal);
-
-                this.nx = normalizedNormal[0];
-                this.ny = normalizedNormal[1];
-                this.nz = normalizedNormal[2];
+            switch (key) {
+                case 'position':
+                    if (_.isUndefined(value)) {
+                        return [0, 0, 0];
+                    }
+                    break;
+                case 'normal':
+                    if (_.isUndefined(value)) {
+                        return [0, 0, 0];
+                    }
+                    break;
+                case 'texCoords':
+                    if (_.isUndefined(value)) {
+                        return [0, 0];
+                    }
+                    break;
             }
+
+            return value;
         },
 
         flatten: function () {
+            var position = this.get('position'),
+                normal = this.get('normal'),
+                texCoords = this.get('texCoords');
+
             return [
-                this.px, this.py, this.pz,
-                this.nx, this.ny, this.nz,
-                this.tx, this.ty
+                position[0], position[1], position[2],
+                normal[0], normal[1], normal[2],
+                texCoords[0], texCoords[1]
             ];
         }
 
     });
 
-}) (modules['utility/class']);
+}) (modules['scaffolding/class']);
 
 
 modules['geometry/mesh/parse'] = (function (Vertex,constants) {
@@ -573,50 +854,46 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
 
             _.each(face, function (faceItem) {
                 var faceItemData = faceItem.split('/'),
-                    vertexRaw = raw.vertices[parseInt(
+                    position = raw.vertices[parseInt(
                         faceItemData[0], 10) - 1],
-                    normalRaw,
-                    texcoordRaw;
+                    normal,
+                    texCoords;
 
                 if (faceFormat === OBJ.FACE_FORMAT.VTN ||
                         faceFormat === OBJ.FACE_FORMAT.VN) {
-                    normalRaw = raw.normals[parseInt(
-                        faceItemData[2], 10) - 1];
+                    normal = raw.normals[parseInt(faceItemData[2], 10) - 1];
                 }
-
-
 
                 if (faceFormat === OBJ.FACE_FORMAT.VT ||
                         faceFormat === OBJ.FACE_FORMAT.VTN) {
-                    texcoordRaw = raw.texcoords[parseInt(
+                    texCoords = raw.texcoords[parseInt(
                         faceItemData[1], 10) - 1];
                 }
 
                 switch (faceFormat) {
                     case OBJ.FACE_FORMAT.V:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2]
-                        );
+                        vertex = new Vertex({
+                            position: position
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VN:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            normalRaw[0], normalRaw[1], normalRaw[2]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            normal: normal
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VTN:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            normalRaw[0], normalRaw[1], normalRaw[2],
-                            texcoordRaw[0], texcoordRaw[1]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            normal: normal,
+                            texCoords: texCoords
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VT:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            undefined, undefined, undefined,
-                            texcoordRaw[0], texcoordRaw[1]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            texCoords: texCoords
+                        });
                         break;
                 }
 
@@ -633,8 +910,8 @@ modules['geometry/mesh/parse'] = (function (Vertex,constants) {
                 return parseObj(source);
             } else {
                 return {
-                    vertices: _.map(source.vertices, function (vertex) {
-                        return new Vertex(vertex);
+                    vertices: _.map(source.vertices, function (attributes) {
+                        return new Vertex(attributes);
                     }),
                     indices: _.flatten(source.indices, true)
                 };
@@ -648,15 +925,14 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
     return Class.extend(_.extend({
 
-        initialize: function (context, source) {
-            this.context = context;
+        initialize: function (attributes, options) {
+            _.bindAll(this, 'linkAttributes');
 
-            var rawData = this.parse(source),
+            var context = this.get('context'),
+                rawData = this.parse(options.source),
                 vbo = context.createBuffer(),
                 ibo = context.createBuffer(),
                 coordsList, flat, i, maxCoord = 0;
-
-            _.bindAll(this, 'linkAttributes');
 
             coordsList = _.flatten(_.reduce(
                 rawData.vertices,
@@ -693,26 +969,26 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
                 context.STATIC_DRAW
             );
 
-            this.vbo = vbo;
-            this.ibo = ibo;
-            this.indexCount = rawData.indices.length;
+            this.set('vbo', vbo);
+            this.set('ibo', ibo);
+            this.set('indexCount', rawData.indices.length);
         },
 
         render: function () {
-            var context = this.context;
+            var context = this.get('context');
 
-            context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
+            context.bindBuffer(context.ARRAY_BUFFER, this.get('vbo'));
 
             this.linkAttributes();
 
-            context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
+            context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.get('ibo'));
 
-            context.drawElements(context.TRIANGLES, this.indexCount,
+            context.drawElements(context.TRIANGLES, this.get('indexCount'),
                 context.UNSIGNED_SHORT, 0);
         },
 
         linkAttributes: function () {
-            var context = this.context,
+            var context = this.get('context'),
                 VERTEX = geometryConstants.VERTEX;
 
             context.vertexAttribPointer(
@@ -739,7 +1015,7 @@ modules['geometry/mesh'] = (function (geometryConstants,programConstants,Class,p
 
     }, parse));
 
-}) (modules['geometry/constants'],modules['gl/program/constants'],modules['utility/class'],modules['geometry/mesh/parse']);
+}) (modules['geometry/constants'],modules['gl/program/constants'],modules['scaffolding/class'],modules['geometry/mesh/parse']);
 
 modules['interaction/actor/constants'] = (function () {
 
@@ -754,7 +1030,8 @@ modules['interaction/actor/constants'] = (function () {
         ROTATIONS: {
             'yaw': 'y',
             'pitch': 'z',
-            'roll': 'x'
+            'roll': 'x',
+            NONE: 0
         },
         MOUSE_FACTOR: -0.0005,
         DEFAULTS: {
@@ -814,125 +1091,82 @@ modules['interaction/actor/constants'] = (function () {
 
 modules['interaction/actor/movement'] = (function (constants) {
 
+    var defaults = constants.DEFAULTS.MOVEMENT;
+
     return {
 
-        initializeMovement: function (options) {
-            var defaults = constants.DEFAULTS.MOVEMENT;
-
-            this.movementSpeed = { x: 0, y: 0, z: 0 };
-            this.movementControlToggle = {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-            this.movementToggle =  {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-            this.accelerationToggle =  { x: false, y: false, z: false };
-
-            this.minimumSpeed = {
-                x: defaults.MINIMUM_SPEED,
-                y: defaults.MINIMUM_SPEED,
-                z: defaults.MINIMUM_SPEED
-            };
-
-            this.maximumSpeed = {
-                x: defaults.MAXIMUM_SPEED,
-                y: defaults.MAXIMUM_SPEED,
-                z: defaults.MAXIMUM_SPEED
-            };
-
-            this.acceleration = {
-                x: defaults.ACCELERATION,
-                y: defaults.ACCELERATION,
-                z: defaults.ACCELERATION
-            };
-
-            this.deceleration = {
-                x: defaults.ACCELERATION,
-                y: defaults.ACCELERATION,
-                z: defaults.ACCELERATION
-            };
-
-            if (!_.isUndefined(options.speed)) {
-                this.setDefaultValues(options.speed.min, this.minimumSpeed);
-                this.setDefaultValues(options.speed.max, this.maximumSpeed);
+        defaults: {
+            movementSpeed: 0,
+            movementControlToggle:  constants.NO_MOVEMENT,
+            movementToggle: constants.NO_MOVEMENT,
+            accelerationToggle: false,
+            acceleration: defaults.ACCELERATION,
+            deceleration: defaults.ACCELERATION,
+            speed: {
+                max: defaults.MAXIMUM_SPEED,
+                min: defaults.MINIMUM_SPEED
             }
+        },
 
-            this.setDefaultValues(options.acceleration, this.acceleration);
-            this.setDefaultValues(options.deceleration, this.deceleration);
+        attributeTypes: {
+            'movementSpeed': 'xyz',
+            'movementControlToggle': 'xyz',
+            'movementToggle': 'xyz',
+            'accelerationToggle': 'xyz',
 
-            // Directional vectors.
-            if (this.checkVector(options.forward)) {
-                this.forward = glm.vec3.fromValues(options.forward.x,
-                    options.forward.y, options.forward.z);
-                glm.vec3.normalize(this.forward, this.forward);
-            } else {
-                this.forward = glm.vec3.fromValues(1, 0, 0);
-            }
-
-            if (this.checkVector(options.up)) {
-                this.up = glm.vec3.fromValues(options.up.x,
-                    options.up.y, options.up.z);
-                glm.vec3.normalize(this.up, this.up);
-            } else {
-                this.up = glm.vec3.fromValues(0, 1, 0);
-            }
-
-            this.right = glm.vec3.create();
-            glm.vec3.cross(this.right, this.forward, this.up);
-            glm.vec3.normalize(this.right, this.right);
-
-            glm.vec3.cross(this.up, this.right, this.forward);
-            glm.vec3.normalize(this.up, this.up);
+            'speed.max': 'xyz',
+            'speed.min': 'xyz',
+            'acceleration': 'xyz',
+            'deceleration': 'xyz'
         },
 
         updateMovement: function (interval) {
+            var movementToggle = this.get('movementToggle'),
+                accelerationToggle = this.get('accelerationToggle'),
+                movementSpeed = this.get('movementSpeed'),
+                minSpeed = this.get('speed.min'),
+                maxSpeed = this.get('speed.max'),
+                acceleration = this.get('acceleration'),
+                deceleration = this.get('deceleration'),
+                movementControlToggle = this.get('movementControlToggle');
 
             _.each(['x', 'y', 'z'], function (axis) {
                 var distance;
 
-                if (this.movementToggle[axis] !== constants.NO_MOVEMENT) {
-                    if (this.accelerationToggle[axis]) {
-                        if (this.movementSpeed[axis] <
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] = this.minimumSpeed[axis];
+                if (movementToggle[axis] !== constants.NO_MOVEMENT) {
+                    if (accelerationToggle[axis]) {
+                        if (movementSpeed[axis] < minSpeed[axis]) {
+                            movementSpeed[axis] = minSpeed[axis];
                         }
 
-                        if (this.movementSpeed[axis] <
-                                this.maximumSpeed[axis]) {
-                            this.movementSpeed[axis] += (interval *
-                                this.acceleration[axis]);
+                        if (movementSpeed[axis] < maxSpeed[axis]) {
+                            movementSpeed[axis] += (interval *
+                                acceleration[axis]);
                         }
 
-                        if (this.movementSpeed[axis] >
-                                this.maximumSpeed[axis]) {
-                            this.movementSpeed[axis] = this.maximumSpeed[axis];
+                        if (movementSpeed[axis] > maxSpeed[axis]) {
+                            movementSpeed[axis] = maxSpeed[axis];
                         }
                     } else {
-                        if (this.movementSpeed[axis] >
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] -= (interval *
-                                this.deceleration[axis]);
+                        if (movementSpeed[axis] > minSpeed[axis]) {
+                            movementSpeed[axis] -= (interval *
+                                deceleration[axis]);
 
-                            if (this.movementControlToggle[axis] !==
+                            if (movementControlToggle[axis] !==
                                     constants.NO_MOVEMENT) {
-                                this.movementSpeed[axis] -= (interval *
-                                    this.acceleration[axis]);
+                                movementSpeed[axis] -= (interval *
+                                    acceleration[axis]);
                             }
                         }
 
-                        if (this.movementSpeed[axis] <
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] = 0;
+                        if (movementSpeed[axis] < minSpeed[axis]) {
+                            movementSpeed[axis] = 0;
                         }
                     }
 
-                    if (this.movementSpeed[axis] > this.minimumSpeed[axis]) {
-                        distance = interval * this.movementSpeed[axis] *
-                            this.movementToggle[axis];
+                    if (movementSpeed[axis] > minSpeed[axis]) {
+                        distance = interval * movementSpeed[axis] *
+                            movementToggle[axis];
 
                         switch (axis) {
                             case 'x': this.moveForward(distance); break;
@@ -940,48 +1174,43 @@ modules['interaction/actor/movement'] = (function (constants) {
                             case 'z': this.moveRight(distance); break;
                         }
                     } else {
-                        this.movementToggle[axis] = constants.NO_MOVEMENT;
+                        movementToggle[axis] = constants.NO_MOVEMENT;
                     }
                 }
 
-                if (this.movementToggle[axis] === constants.NO_MOVEMENT &&
-                        this.movementControlToggle[axis] !==
-                        constants.NO_MOVEMENT) {
-                    this.movementToggle[axis] =
-                        this.movementControlToggle[axis];
+                if (movementToggle[axis] === constants.NO_MOVEMENT &&
+                        movementControlToggle[axis] !== constants.NO_MOVEMENT) {
+                    movementToggle[axis] = movementControlToggle[axis];
                 }
 
-                if (this.movementToggle[axis] ===
-                        this.movementControlToggle[axis]) {
-                    this.accelerationToggle[axis] = true;
+                if (movementToggle[axis] === movementControlToggle[axis]) {
+                    accelerationToggle[axis] = true;
                 }
 
-                if (this.movementControlToggle[axis] ===
-                        constants.NO_MOVEMENT) {
-                    this.accelerationToggle[axis] = false;
+                if (movementControlToggle[axis] === constants.NO_MOVEMENT) {
+                    accelerationToggle[axis] = false;
                 }
 
             }, this);
         },
 
         move: function (direction, distance) {
-            glm.vec3.add(
-                this.node.position,
-                this.node.position,
-                glm.vec3.multiply([], direction, [distance, distance, distance])
-            );
+            var position = this.get('node').get('position');
+
+            glm.vec3.add(position, position, glm.vec3.multiply(
+                [], direction, [distance, distance, distance]));
         },
 
         moveForward: function (distance) {
-            this.move(this.forward, distance);
+            this.move(this.get('forward'), distance);
         },
 
         moveUp: function (distance) {
-            this.move(this.up, distance);
+            this.move(this.get('up'), distance);
         },
 
         moveRight: function (distance) {
-            this.move(this.right, distance);
+            this.move(this.get('right'), distance);
         },
     };
 
@@ -989,78 +1218,38 @@ modules['interaction/actor/movement'] = (function (constants) {
 
 modules['interaction/actor/rotation'] = (function (constants) {
 
+    var defaults = constants.DEFAULTS.ROTATION;
+
     return {
 
-        initializeRotation: function (options) {
-            var defaults = constants.DEFAULTS.ROTATION;
-
-            // Rotation variables.
-            this.rotationToggle = {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-
-            this.rotationMouseControl = {
-                x: constants.ROTATIONS.NONE,
-                y: constants.ROTATIONS.NONE
-            };
-
-            this.rotationAngle = { x: 0, y: 0, z: 0 };
-
-            this.gimbals = (_.isBoolean(options.gimbals) ?
-                options.gimbals : true);
-
-            this.rotationSensitivity = {
-                x: defaults.SENSITIVITY,
-                y: defaults.SENSITIVITY,
-                z: defaults.SENSITIVITY
-            };
-
-            this.rotationSpeed = {
-                x: defaults.SPEED,
-                y: defaults.SPEED,
-                z: defaults.SPEED
-            };
-
-            if (!_.isUndefined(options.controls) &&
-                    !_.isUndefined(options.controls.mouse)) {
-                this.setDefaultValues(options.controls.mouse.sensitivity,
-                    this.rotationSensitivity);
-            }
-
-            this.setDefaultValues(options.rotationSpeed, this.rotationSpeed);
-
-            if (_.isUndefined(options.gimbals)) {
-                this.rotationWithGimbals = true;
-
-                if (_.isArray(options.gimbals) &&
-                        options.gimbals.length === 3) {
-                    this.rotationAxes = options.gimbals;
-                } else {
-                    this.rotationAxes = defaults.ORDER;
-                }
-            } else {
-                this.rotationWithGimbals = false;
-
-                if (_.isArray(options.rotationOrder) &&
-                        options.rotationOrder.length === 3) {
-                    this.rotationAxes = options.rotationOrder;
-                } else {
-                    this.rotationAxes = defaults.ORDER;
-                }
-            }
-
-            _.bindAll(this, 'cursorMove');
+        defaults: {
+            rotationToggle: constants.NO_MOVEMENT,
+            rotationMouseControl: constants.ROTATIONS.NONE,
+            rotationAngle: 0,
+            rotationGimbals: true,
+            rotationAxisOrder: defaults.ORDER,
+            rotationSensitivity: defaults.SENSITIVITY,
+            rotationSpeed: defaults.SPEED,
         },
 
-        cursorMove: function (cursor, eventName, data) {
-            var angles = {};
+        attributeTypes: {
+            'rotationToggle': 'xyz',
+            'rotationMouseControl': 'xy',
+            'rotationAngle': 'xyz',
+            'rotationSensitivity': 'xy',
+            'rotationSpeed': 'xyz'
+        },
 
-            angles[this.rotationMouseControl.x] = constants.MOUSE_FACTOR *
-                this.rotationSensitivity[this.rotationMouseControl.x] * data.x;
-            angles[this.rotationMouseControl.y] = constants.MOUSE_FACTOR *
-                this.rotationSensitivity[this.rotationMouseControl.y] * data.y;
+        cursorMove: function (ev) {
+            var angles = {},
+                data = ev.data,
+                rotationMouseControl = this.get('rotationMouseControl'),
+                rotationSensitivity = this.get('rotationSensitivity');
+
+            angles[rotationMouseControl.x] = constants.MOUSE_FACTOR *
+                rotationSensitivity.x * data.x;
+            angles[rotationMouseControl.y] = constants.MOUSE_FACTOR *
+                rotationSensitivity.y * data.y;
 
             this.rotate(angles, true);
         },
@@ -1077,16 +1266,18 @@ modules['interaction/actor/rotation'] = (function (constants) {
                     return angleData || 0;
                 }
             } else {
-                return this.rotationSpeed[axis] * angleData *
-                    this.rotationToggle[axis];
+                return this.get('rotationSpeed')[axis] * angleData *
+                    this.get('rotationToggle')[axis];
             }
         },
 
         rotate: function (angleData, exact) {
-            if (this.rotationWithGimbals) {
-                this.rotateGimbals(this.rotationAxes, angleData, exact);
+            if (this.get('rotationGimbals')) {
+                this.rotateGimbals(this.get('rotationAxisOrder'), angleData,
+                    exact);
             } else {
-                this.rotateDirect(this.rotationAxes, angleData, exact);
+                this.rotateDirect(this.get('rotationAxisOrder'), angleData,
+                    exact);
             }
         },
 
@@ -1108,7 +1299,7 @@ modules['interaction/actor/rotation'] = (function (constants) {
         rotateGimbals: function (axes, angleData, exact) {
 
             var axis = _.first(axes),
-                angle = this.rotationAngle[axis],
+                angle = this.get('rotationAngle')[axis],
                 angleIncrease = this.getAngleIncrease(axis, angleData, exact);
 
             if (axes.length > 1) {
@@ -1123,7 +1314,7 @@ modules['interaction/actor/rotation'] = (function (constants) {
 
             if (angleIncrease !== 0) {
                 angle += angleIncrease;
-                this.rotationAngle[axis] = angle;
+                this.set('rotationAngle.' + axis, angle);
 
                 if (axes.length === 1) {
                     switch (axis) {
@@ -1144,33 +1335,39 @@ modules['interaction/actor/rotation'] = (function (constants) {
         },
 
         rotateX: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.forward, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), forward,
+                    angle);
 
-            glm.vec3.normalize(this.up,
-                glm.vec3.transformQuat(this.up, this.up, rotation));
-            glm.vec3.normalize(this.right,
-                glm.vec3.transformQuat(this.right, this.right, rotation));
+            glm.vec3.normalize(up, glm.vec3.transformQuat(up, up, rotation));
+            glm.vec3.normalize(right, glm.vec3.transformQuat(right, right,
+                rotation));
         },
 
         rotateY: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.up, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), up, angle);
 
-            glm.vec3.normalize(this.forward,
-                glm.vec3.transformQuat(this.forward, this.forward, rotation));
-            glm.vec3.normalize(this.right,
-                glm.vec3.transformQuat(this.right, this.right, rotation));
+            glm.vec3.normalize(forward, glm.vec3.transformQuat(forward, forward,
+                rotation));
+            glm.vec3.normalize(right, glm.vec3.transformQuat(right, right,
+                rotation));
         },
 
         rotateZ: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.right, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), right,
+                    angle);
 
-            glm.vec3.normalize(this.up,
-                glm.vec3.transformQuat(this.up, this.up, rotation));
-            glm.vec3.normalize(this.forward,
-                glm.vec3.transformQuat(this.forward, this.forward, rotation));
+            glm.vec3.normalize(up, glm.vec3.transformQuat(up, up, rotation));
+            glm.vec3.normalize(forward, glm.vec3.transformQuat(forward, forward,
+                rotation));
         }
     };
 
@@ -1296,29 +1493,105 @@ modules['interaction/cursor'] = (function (namespace,Class,lock) {
 
     return namespace.cursor;
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['interaction/cursor/lock']);
+}) (modules['scaffolding/namespace'],modules['scaffolding/class'],modules['interaction/cursor/lock']);
 
 
-modules['interaction/actor'] = (function (Class,constants,movement,rotation,cursor) {
+modules['interaction/keyboard'] = (function (Class,namespace) {
 
-    return Class.extend(_.extend({
-        initialize: function (options) {
+    var Keyboard = Class.extend({
 
-            this.initializeMovement(options);
-
-            this.initializeRotation(options);
-
-            this.setControls(options.controls);
-
+        initialize: function () {
+            this.set('listener', new keypress.Listener());
         },
 
-        checkVector: function (v) {
-            return (!_.isUndefined(v) && _.isNumber(v.x) &&
-                _.isNumber(v.y) && _.isNumber(v.z));
+        listen: function (keys, downCallback, upCallback) {
+            this.get('listener').register_combo({
+                keys: keys,
+                on_keydown: downCallback,
+                on_keyup: upCallback
+            });
+        }
+
+    });
+
+    namespace.Keyboard = namespace.Keyboard || new Keyboard();
+
+    return namespace.Keyboard;
+
+}) (modules['scaffolding/class'],modules['scaffolding/namespace']);
+
+
+modules['interaction/actor'] = (function (Class,constants,movement,rotation,cursor,error,Keyboard) {
+
+    return Class.extend(_.merge({
+
+        set: function (key, value) {
+
+            switch (key) {
+                case 'speed':
+                    if (_.isPlainObject(value)) {
+                        if ('max' in value) {
+                            Class.prototype.set.call(this, 'speed.max',
+                                value.max);
+                        }
+
+                        if ('min' in value) {
+                            Class.prototype.set.call(this, 'speed.min',
+                                value.min);
+                        }
+
+                        return this;
+                    } else {
+                        error('speed configuration must contain minimum or ' +
+                            'maximum properties');
+                    }
+                    break;
+                case 'rotationAxisOrder':
+                    if (_.isArray(value) && value.length === 3 &&
+                            _.indexOf(value, 'x') !== -1 &&
+                            _.indexOf(value, 'y') !== -1 &&
+                            _.indexOf(value, 'z') !== -1) {
+                        return Class.prototype.set.call(this, key, value);
+                    } else {
+                        error('incorrect format for rotationAxisOrder');
+                    }
+                    break;
+            }
+
+            return Class.prototype.set.call(this, key, value);
         },
 
-        setNode: function (node) {
-            this.node = node;
+        defaults: {
+            forward: { x: 1, y: 0, z: 0 },
+            up: { x: 0, y: 1, z: 0 }
+        },
+
+        attributeTypes: {
+            'up': 'vec3',
+            'forward': 'vec3',
+            'right': 'vec3'
+        },
+
+        initialize: function () {
+
+            _.bindAll(this, 'cursorMove');
+
+            var forward = this.get('forward'),
+                up = this.get('up'),
+                right = glm.vec3.create();
+
+            glm.vec3.normalize(forward, forward);
+            glm.vec3.normalize(up, up);
+
+            glm.vec3.cross(right, forward, up);
+            glm.vec3.normalize(right, right);
+            this.set('right', right);
+
+            glm.vec3.cross(up, right, forward);
+            glm.vec3.normalize(up, up);
+
+            this.setControls(this.get('controls'));
+
         },
 
         update: function (interval) {
@@ -1330,9 +1603,9 @@ modules['interaction/actor'] = (function (Class,constants,movement,rotation,curs
             var value = (toggle ? direction : constants.NO_MOVEMENT);
 
             if (rotation) {
-                this.rotationToggle[axis] = value;
+                this.get('rotationToggle')[axis] = value;
             } else {
-                this.movementControlToggle[axis] = value;
+                this.get('movementControlToggle')[axis] = value;
             }
         },
 
@@ -1353,19 +1626,25 @@ modules['interaction/actor'] = (function (Class,constants,movement,rotation,curs
         },
 
         setControls: function (controls) {
-            var mouse = false;
-            this.rotationMouseControl.x = constants.ROTATIONS.NONE;
-            this.rotationMouseControl.y = constants.ROTATIONS.NONE;
+            var mouse = false,
+                rotationMouseControl = this.get('rotationMouseControl');
+
+            rotationMouseControl.x = constants.ROTATIONS.NONE;
+            rotationMouseControl.y = constants.ROTATIONS.NONE;
 
             _.each(controls, function (key, control) {
                 if (control === 'mouse') {
                     mouse = true;
-                    this.rotationMouseControl.x = constants.ROTATIONS[key.x];
-                    this.rotationMouseControl.y = constants.ROTATIONS[key.y];
+                    rotationMouseControl.x = constants.ROTATIONS[key.x];
+                    rotationMouseControl.y = constants.ROTATIONS[key.y];
+
+                    if (!_.isUndefined(key.sensitivity)) {
+                        this.set('rotationSensitivity', key.sensitivity);
+                    }
                 } else {
                     control = constants.CONTROLS[control];
 
-                    this.listenToKey(
+                    Keyboard.listen(
                         key,
 
                         (function () {
@@ -1383,64 +1662,77 @@ modules['interaction/actor'] = (function (Class,constants,movement,rotation,curs
 
             if (mouse) {
                 cursor.addLockRequest();
-                this.listen(cursor, 'move', this.cursorMove);
+                this.listenTo(cursor, 'move', this.cursorMove);
             } else {
                 cursor.removeLockRequest();
-                // this.stopListening(cursor, 'move', this.cursorMove);
+                this.stopListeningTo(cursor, 'move', this.cursorMove);
             }
         }
     }, movement, rotation));
 
-}) (modules['utility/class'],modules['interaction/actor/constants'],modules['interaction/actor/movement'],modules['interaction/actor/rotation'],modules['interaction/cursor']);
+}) (modules['scaffolding/class'],modules['interaction/actor/constants'],modules['interaction/actor/movement'],modules['interaction/actor/rotation'],modules['interaction/cursor'],modules['utility/error'],modules['interaction/keyboard']);
 
 
 modules['interaction/camera'] = (function (Actor) {
 
     return Actor.extend({
 
-        initialize: function (options) {
+        defaults: {
+            fov: 60,
+            zNear: 0.1,
+            zFar: 500
+        },
+
+        attributeTypes: {
+            fov: 'number',
+            zNear: 'number',
+            zFar: 'number'
+        },
+
+        initialize: function (attributes, options) {
             Actor.prototype.initialize.apply(this, arguments);
 
-            this.fov = _.isNumber(options.fov) ? options.fov : 60;
-            this.zNear = _.isNumber(options.zNear) ? options.zNear : 0.1;
-            this.zFar = _.isNumber(options.zFar) ? options.zFar : 500;
-
-            this.viewMatrix = glm.mat4.create();
-            this.projectionMatrix = glm.mat4.create();
-            this.eyePosition = glm.vec3.create();
-            this.currentViewProjectionMatrix = glm.mat4.create();
-            this.inverseViewProjectionMatrix = glm.mat4.create();
+            this.set('viewMatrix', glm.mat4.create())
+                .set('projectionMatrix', glm.mat4.create())
+                .set('eyePosition', glm.vec3.create())
+                .set('currentViewProjectionMatrix', glm.mat4.create())
+                .set('inverseViewProjectionMatrix', glm.mat4.create());
         },
 
         use: function (context) {
             context._currentCamera = this;
         },
 
-        render: function (canvas, context) {
+        render: function (width, height, context) {
 
             if (context._currentCamera === this) {
-                var position = this.node.position;
+                var position = this.get('node').get('position'),
+                    eyePosition = this.get('eyePosition'),
+                    viewMatrix = this.get('viewMatrix'),
+                    modelMatrix = this.get('modelMatrix'),
+                    projectionMatrix = this.get('projectionMatrix'),
+                    currentViewProjectionMatrix =
+                        this.get('currentViewProjectionMatrix');
 
-                glm.vec3.transformMat4(this.eyePosition, position,
-                    this.modelMatrix);
+                glm.vec3.transformMat4(eyePosition, position, modelMatrix);
 
-                glm.mat4.lookAt(this.viewMatrix, position,
-                    glm.vec3.add([], position, this.forward), this.up);
+                glm.mat4.lookAt(viewMatrix, position,
+                    glm.vec3.add([], position, this.get('forward')),
+                    this.get('up'));
 
-                glm.mat4.multiply(this.viewMatrix, this.modelMatrix,
-                    this.viewMatrix);
+                glm.mat4.multiply(viewMatrix, modelMatrix, viewMatrix);
 
-                glm.mat4.perspective(this.projectionMatrix,
-                    this.fov * Math.PI / 180, canvas.width / canvas.height,
-                    this.zNear, this.zFar);
+                glm.mat4.perspective(projectionMatrix,
+                    this.get('fov') * Math.PI / 180, width / height,
+                    this.get('zNear'), this.get('zFar'));
 
-                this.previousViewProjectionMatrix = glm.mat4.clone(
-                    this.currentViewProjectionMatrix);
+                this.set('previousViewProjectionMatrix',
+                    glm.mat4.clone(currentViewProjectionMatrix));
 
-                glm.mat4.multiply(this.currentViewProjectionMatrix,
-                    this.projectionMatrix, this.viewMatrix);
-                glm.mat4.invert(this.inverseViewProjectionMatrix,
-                    this.currentViewProjectionMatrix);
+                glm.mat4.multiply(currentViewProjectionMatrix,
+                    projectionMatrix, viewMatrix);
+                glm.mat4.invert(this.get('inverseViewProjectionMatrix'),
+                    currentViewProjectionMatrix);
 
                 this.sendUniforms(context);
             }
@@ -1448,26 +1740,28 @@ modules['interaction/camera'] = (function (Actor) {
         },
 
         sendUniforms: function (context) {
-            context.uniformMatrix4fv('viewMat', false, this.viewMatrix);
+            var eyePosition = this.get('eyePosition');
 
-            context.uniform3f('eyePosition', this.eyePosition[0],
-                this.eyePosition[1], this.eyePosition[2]);
+            context.uniformMatrix4fv('viewMat', false, this.get('viewMatrix'));
+
+            context.uniform3f('eyePosition', eyePosition[0], eyePosition[1],
+                eyePosition[2]);
 
             context.uniformMatrix4fv('projectionMat', false,
-                this.projectionMatrix);
+                this.get('projectionMatrix'));
 
             context.uniformMatrix4fv('viewProjectionMat', false,
-                this.currentViewProjectionMatrix);
+                this.get('currentViewProjectionMatrix'));
 
             context.uniformMatrix4fv('viewProjectionInverseMat', false,
-                this.inverseViewProjectionMatrix);
+                this.get('inverseViewProjectionMatrix'));
 
             context.uniformMatrix4fv('previousViewProjectionMat', false,
-                this.previousViewProjectionMatrix);
+                this.get('previousViewProjectionMatrix'));
         },
 
         prepareRender: function (modelMatrix) {
-            this.modelMatrix = modelMatrix;
+            this.set('modelMatrix', modelMatrix);
         }
 
     });
@@ -1477,13 +1771,14 @@ modules['interaction/camera'] = (function (Actor) {
 modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
 
     return {
-        initializeScene: function (scene) {
+        initializeScene: function (ev) {
+            var scene = ev.source || ev;
 
             this.trigger('startLoading');
 
             if (scene.isLoaded()) {
-                var context = this.context,
-                    sources = scene.sources,
+                var context = this.get('context'),
+                    sources = scene.get('sources'),
                     resources = {
                         ambientLight: sources.ambientLight,
                         backgroundColor: sources.backgroundColor,
@@ -1509,11 +1804,12 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                 // Programs.
                 _.each(sources.programs, function (source, key) {
                     resources.programs[key] = new Program(
-                        context,
-                        _.reduce(source, function (result, path, key) {
-                            result[key] = sources.shaders[path];
-                            return result;
-                        }, {})
+                        { context: context },
+                        { sources:
+                            _.reduce(source, function (result, path, key) {
+                                result[key] = sources.shaders[path];
+                                return result;
+                            }, {}) }
                     );
                 }, this);
 
@@ -1534,7 +1830,10 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
 
                 // Meshes.
                 _.each(sources.meshSources, function (source, key) {
-                    resources.allMeshes[key] = new Mesh(context, source);
+                    resources.allMeshes[key] = new Mesh(
+                        { context: context },
+                        { source: source }
+                    );
                 }, this);
 
                 _.each(sources.meshNames, function (path, name) {
@@ -1545,7 +1844,8 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
                 _.each(sources.textureOptions, function (options, index) {
                     options.source = sources.textureSources[options.path];
 
-                    resources.allTextures.push(new Texture(options, context));
+                    resources.allTextures.push(new Texture({ context: context },
+                        options));
 
                     if (!_.isUndefined(options.name)) {
                         resources.textures[options.name] =
@@ -1555,12 +1855,12 @@ modules['gl/canvas/initialize'] = (function (Program,Texture,Mesh,Camera) {
 
                 resources.tree = this.initializeNode(sources.tree, resources);
 
-                this.scenes[scene.uid].resources = resources;
+                this.get('scenes')[scene.uid].resources = resources;
 
                 this.trigger('finishLoading');
 
             } else {
-                this.listen(scene, 'loaded', this.initializeScene);
+                this.listenTo(scene, 'loaded', this.initializeScene);
             }
 
         },
@@ -1630,7 +1930,7 @@ modules['shading/render'] = (function () {
 
 }) ();
 
-modules['gl/canvas/constants'] = (function (Vertex) {
+modules['gl/canvas/constants'] = (function () {
 
     return  {
         EXTENSIONS: [
@@ -1641,7 +1941,7 @@ modules['gl/canvas/constants'] = (function (Vertex) {
             STYLE: {
                 WRAPPER: {
                     position: 'absolute',
-                    zIndex: '1000',
+                    zIndex: '2000',
                     backgroundColor: '#222'
                 },
                 INNER: {
@@ -1660,6 +1960,49 @@ modules['gl/canvas/constants'] = (function (Vertex) {
             ROTATION_PROPERTIES: ['webkitTransform', 'mozTransform',
                 'msTransform', 'oTransform', 'transform'],
         },
+        FPS_COUNTER: {
+            STYLE: {
+                WRAPPER: {
+                    position: 'absolute',
+                    zIndex: '1000',
+                    backgroundColor: 'rgba(210, 30, 30, 0.4)',
+                    width: '60px',
+                    height: '70px'
+                },
+                INFO: {
+                    float: 'left',
+                    margin: '1px',
+                    width: '28px',
+                    height: '18px',
+                    lineHeight: '18px',
+                    fontSize: '14px',
+                    color: '#eadada',
+                    fontFamily: '"System"',
+                    overflow: 'hidden',
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                },
+                INFO_HEADER: {
+                    fontSize: '10px',
+                    fontFamily: '"Arial"'
+                },
+                GRAPH: {
+                    margin: '1px',
+                    width: '58px',
+                    height: '28px'
+                }
+            },
+            GRAPH: {
+                MAX_FPS: 70,
+                LINE_WIDTH: 2,
+                HIGHLIGHT_WIDTH: 1,
+                COLOR: '#1d0101',
+                HIGHLIGHT: '#dba3a3'
+            },
+            POSITION_OFFSET: 5,
+            FRAME_COUNT: 29,
+            FRAME_GROUP_COUNT: 60
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -1667,10 +2010,26 @@ modules['gl/canvas/constants'] = (function (Vertex) {
             },
             MESH: {
                 vertices: [
-                    [-1, -1, 0, 0, 0, 1, 0, 0],
-                    [-1, 1, 0, 0, 0, 1, 0, 1],
-                    [1, 1, 0, 0, 0, 1, 1, 1],
-                    [1, -1, 0, 0, 0, 1, 1, 0]
+                    {
+                        position: [-1, -1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [0, 0]
+                    },
+                    {
+                        position: [-1, 1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [0, 1]
+                    },
+                    {
+                        position: [1, 1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [1, 1]
+                    },
+                    {
+                        position: [1, -1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [1, 0]
+                    }
                 ],
                 indices: [[0, 1, 2], [0, 2, 3]]
             },
@@ -1710,43 +2069,45 @@ modules['gl/canvas/constants'] = (function (Vertex) {
         }
     };
 
-}) (modules['geometry/vertex']);
+}) ();
 
 modules['gl/canvas/render'] = (function (lightingRender,constants) {
 
     return {
-        render: function (initiator, eventName, eventData) {
+        render: function (ev) {
             var color,
-                context = this.context,
-                canvas = this.canvas,
-                rtt, resources, scene, source, target, aux,
+                context = this.get('context'),
+                canvas = this.get('canvas'),
+                currentScene = this.get('currentScene'),
+                scenes = this.get('scenes'),
+                rtt, postprocessing, resources, scene, source, target, aux,
                 texelSize = {}, first, fps;
 
             this.resize();
 
-            if (!_.isUndefined(this.scene) &&
-                    !_.isUndefined(this.scenes[this.scene.uid]) &&
-                    !_.isUndefined(this.scenes[this.scene.uid].resources)) {
+            if (!_.isUndefined(currentScene) &&
+                    !_.isUndefined(scenes[currentScene.uid]) &&
+                    !_.isUndefined(scenes[currentScene.uid].resources)) {
 
-                scene = this.scenes[this.scene.uid];
+                scene = scenes[currentScene.uid];
                 resources = scene.resources;
 
                 if (!_.isUndefined(resources.postprocessing)) {
                     this.initializePostprocessing();
 
-                    if (!this.rttEnabled) {
+                    if (!this.get('rtt.enabled')) {
                         this.initializeRTT();
                     }
                 } else {
-                    this.postprocessingEnabled = false;
+                    this.set('postprocessing.enabled', false);
                 }
 
-                rtt = this.rtt;
+                rtt = this.get('rtt');
 
-                if (this.rttEnabled) {
+                if (rtt.enabled) {
                     rtt.fbo.bind();
-                    context.viewport(0, 0, rtt.colorTexture.width,
-                        rtt.colorTexture.height);
+                    context.viewport(0, 0, rtt.colorTexture.get('width'),
+                        rtt.colorTexture.get('height'));
                 } else {
                     context.viewport(0, 0, canvas.width, canvas.height);
                 }
@@ -1761,34 +2122,36 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 }
 
                 color = resources.backgroundColor ||
-                    this.config.backgroundColor;
+                    this.get('config.backgroundColor');
                 context.clearColor(color.r, color.g, color.b, 1);
 
                 context.uniform3f('ambientLight', false,
                     resources.ambientLight.r, resources.ambientLight.g,
                     resources.ambientLight.b);
 
-                context._currentCamera.render(this.canvas, context);
+                context._currentCamera.render(canvas.width, canvas.height,
+                    context);
 
                 lightingRender(context, resources.lights);
 
                 resources.tree.render(context, resources);
 
-                if (this.rttEnabled) {
+                if (rtt.enabled) {
                     rtt.fbo.unbind();
                 }
 
+                postprocessing = this.get('postprocessing');
 
                 // Postprocessing.
-                if (this.postprocessingEnabled) {
-                    source = this.postprocessing.primary;
-                    target = this.postprocessing.secondary;
+                if (postprocessing.enabled) {
+                    source = postprocessing.primary;
+                    target = postprocessing.secondary;
                     first = true;
 
                     texelSize.x = 1.0 / canvas.width;
                     texelSize.y = 1.0 / canvas.height;
 
-                    fps = 1.0 / eventData.interval;
+                    fps = 1.0 / ev.data.interval;
 
                     _.each(resources.postprocessing, function (program) {
                         aux = source;
@@ -1822,14 +2185,14 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 }
 
                 // Render the RTT texture to the quad.
-                if (this.rttEnabled) {
+                if (rtt.enabled) {
                     context.viewport(0, 0, canvas.width, canvas.height);
 
                     this.clear();
 
                     rtt.program.use();
 
-                    if (this.postprocessingEnabled) {
+                    if (postprocessing.enabled) {
                         target.colorTexture.render(0);
                     } else {
                         rtt.colorTexture.render(0);
@@ -1838,15 +2201,18 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                     rtt.mesh.render();
                 }
             }
+
+            this.trigger('finishRendering');
         },
 
         clear: function () {
-            this.context.clear(this.context.COLOR_BUFFER_BIT |
-                this.context.DEPTH_BUFFER_BIT);
+            var context = this.get('context');
+
+            context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT);
         },
 
         resize: function () {
-            var canvas = this.canvas, context = this.context;
+            var canvas = this.get('canvas');
 
             if (canvas.width !== canvas.clientWidth ||
                 canvas.height !== canvas.clientHeight) {
@@ -1855,8 +2221,6 @@ modules['gl/canvas/render'] = (function (lightingRender,constants) {
                 canvas.height = canvas.clientHeight;
 
                 this.trigger('resize');
-                this.resizeRTT();
-                this.resizePostprocessing();
             }
         }
     };
@@ -1867,97 +2231,106 @@ modules['gl/framebuffer'] = (function (Class) {
 
     return Class.extend({
 
-        initialize: function (context) {
-            var framebuffer = context.createFramebuffer();
-
-            this.framebuffer = framebuffer;
-            this.context = context;
+        initialize: function () {
+            this.set('fbo', this.get('context').createFramebuffer());
         },
 
         bind: function () {
-            this.context.bindFramebuffer(this.context.FRAMEBUFFER,
-                this.framebuffer);
+            var context = this.get('context');
+
+            context.bindFramebuffer(context.FRAMEBUFFER, this.get('fbo'));
         },
 
         unbind: function () {
-            this.context.bindFramebuffer(this.context.FRAMEBUFFER, null);
+            var context = this.get('context');
+
+            context.bindFramebuffer(context.FRAMEBUFFER, null);
         },
 
         attachTexture: function (texture, attachment) {
+            var context = this.get('context');
+
             this.bind();
 
-            this.context.framebufferTexture2D(this.context.FRAMEBUFFER,
-                attachment, this.context.TEXTURE_2D, texture, 0);
+            context.framebufferTexture2D(context.FRAMEBUFFER,
+                attachment, context.TEXTURE_2D, texture, 0);
 
             this.unbind();
         },
 
         attachColorTexture: function (texture) {
-            this.attachTexture(texture.texture, this.context.COLOR_ATTACHMENT0);
+            this.attachTexture(texture.get('texture'),
+                this.get('context').COLOR_ATTACHMENT0);
         },
 
         attachDepthTexture: function (texture) {
-            this.attachTexture(texture.texture, this.context.DEPTH_ATTACHMENT);
+            this.attachTexture(texture.get('texture'),
+                this.get('context').DEPTH_ATTACHMENT);
         },
 
         attachDepthBuffer: function (buffer) {
-            this.bind();
+            var context = this.get('context');
 
-            this.context.framebufferRenderbuffer(
-                this.context.FRAMEBUFFER,
-                this.context.DEPTH_ATTACHMENT,
-                this.context.RENDERBUFFER,
-                buffer
-            );
-
-            this.unbind();
+            context.framebufferRenderbuffer(context.FRAMEBUFFER,
+                context.DEPTH_ATTACHMENT, context.RENDERBUFFER, buffer);
         }
 
     });
 
 
-}) (modules['utility/class']);
+}) (modules['scaffolding/class']);
 
 
 modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh) {
 
     return {
         initializeRTT: function () {
-            if (_.isUndefined(this.rtt)) {
-                var context = this.context,
+            if (!this.get('rtt.initialized')) {
+                _.bindAll(this, 'resizeRTT');
+
+                var context = this.get('context'),
                     rtt = {
-                        fbo: new Framebuffer(context),
-                        program: new Program(context,
-                            constants.RTT.PROGRAM.shaders)
+                        fbo: new Framebuffer({ context: context }),
+                        program: new Program(
+                            { context: context },
+                            { sources: constants.RTT.PROGRAM.shaders }
+                        ),
+                        mesh: new Mesh(
+                            { context: context },
+                            { source: constants.RTT.MESH }
+                        ),
+                        initialized: true,
+                        enabled: true
                     };
 
-                this.rtt = rtt;
-
-                rtt.mesh = new Mesh(context, constants.RTT.MESH);
+                this.set('rtt', rtt);
+                this.listenTo(this, 'resize', this.resizeRTT);
+                this.resizeRTT();
+            } else {
+                this.set('rtt.enabled', true);
             }
-
-            this.rttEnabled = true;
-            this.resizeRTT();
         },
 
         resizeRTT: function () {
-            if (!_.isUndefined(this.rtt) && this.rttEnabled) {
-                var context = this.context,
-                    rtt = this.rtt,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+            var rtt = this.get('rtt');
+
+            if (rtt.initialized && rtt.enabled) {
+                var context = this.get('context'),
+                    canvas = this.get('canvas'),
+                    width = canvas.width,
+                    height = canvas.height;
 
                 if (!_.isUndefined(rtt.colorTexture)) {
                     delete rtt.colorTexture;
                 }
 
                 rtt.colorTexture = new Texture(
+                    { context: context },
                     _.extend({
                         source: null,
                         width: width,
                         height: height
-                    }, constants.RTT.TEXTURE),
-                    context
+                    }, constants.RTT.TEXTURE)
                 );
 
                 rtt.fbo.attachColorTexture(rtt.colorTexture);
@@ -1968,14 +2341,14 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
                     }
 
                     rtt.depthTexture = new Texture(
+                        { context: context },
                         _.extend({
                             source: null,
                             width: width,
                             height: height,
                             format: 'DEPTH_COMPONENT',
                             type: 'UNSIGNED_SHORT'
-                        }, constants.RTT.TEXTURE),
-                        context
+                        }, constants.RTT.TEXTURE)
                     );
 
                     rtt.fbo.attachDepthTexture(rtt.depthTexture);
@@ -1986,7 +2359,8 @@ modules['gl/canvas/rtt'] = (function (Framebuffer,Program,constants,Texture,Mesh
 
                     rtt.depthbuffer = context.createRenderbuffer();
 
-                    context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
+                    context.bindRenderbuffer(context.RENDERBUFFER,
+                        rtt.depthbuffer);
                     context.renderbufferStorage(
                         context.RENDERBUFFER,
                         context.DEPTH_COMPONENT16,
@@ -2007,49 +2381,58 @@ modules['gl/canvas/postprocessing'] = (function (Framebuffer,constants,Texture) 
 
     return {
         initializePostprocessing: function () {
-            if (_.isUndefined(this.postprocessing)) {
-                var context = this.context,
+            if (!this.get('postprocessing.initialized')) {
+                _.bindAll(this, 'resizePostprocessing');
+
+                var context = this.get('context'),
                     postprocessing = {
                         primary: {
-                            fbo: new Framebuffer(context)
+                            fbo: new Framebuffer({ context: context })
                         },
                         secondary: {
-                            fbo: new Framebuffer(context)
-                        }
+                            fbo: new Framebuffer({ context: context })
+                        },
+                        initialized: true,
+                        enabled: true
                     };
 
-                this.postprocessing = postprocessing;
+                this.set('postprocessing', postprocessing);
+                this.listenTo(this, 'resize', this.resizePostprocessing);
+                this.resizePostprocessing();
+            } else {
+                this.set('postprocessing.enabled', true);
             }
-
-            this.postprocessingEnabled = true;
-            this.resizePostprocessing();
         },
 
         resizePostprocessing: function() {
-            if (!_.isUndefined(this.postprocessing) &&
-                    this.postprocessingEnabled) {
-                var context = this.context,
-                    postprocessing = this.postprocessing,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+            var postprocessing = this.get('postprocessing');
 
-                _.each(postprocessing, function (obj) {
-                    if (!_.isUndefined(obj.colorTexture)) {
-                        delete obj.colorTexture;
-                    }
-
-                    obj.colorTexture = new Texture(
-                        _.extend({
-                            source: null,
-                            width: width,
-                            height: height
-                        }, constants.RTT.TEXTURE),
-                        context
-                    );
-
-                    obj.fbo.attachColorTexture(obj.colorTexture);
-                }, this);
+            if (postprocessing.initialized && postprocessing.enabled) {
+                this.resizePostprocessingComponent(postprocessing.primary);
+                this.resizePostprocessingComponent(postprocessing.secondary);
             }
+        },
+
+        resizePostprocessingComponent: function (component) {
+            var context = this.get('context'),
+                canvas = this.get('canvas'),
+                width = canvas.width,
+                height = canvas.height;
+
+            if (!_.isUndefined(component.colorTexture)) {
+                delete component.colorTexture;
+            }
+
+            component.colorTexture = new Texture(
+                { context: context },
+                _.extend({
+                    source: null,
+                    width: width,
+                    height: height
+                }, constants.RTT.TEXTURE)
+            );
+
+            component.fbo.attachColorTexture(component.colorTexture);
         }
     };
 
@@ -2063,33 +2446,35 @@ modules['gl/canvas/extensions'] = (function (constants) {
     return {
 
         initializeExtensions: function () {
-            var extensions = constants.EXTENSIONS,
-                context = this.context;
+            var requiredExtensions = constants.EXTENSIONS,
+                context = this.get('context'),
+                availableExtensions = {},
+                extensions = {};
 
-            this.availableExtensions = {};
-            this.extensions = {};
-
-            _.each(extensions, function (extensionName) {
+            _.each(requiredExtensions, function (extensionName) {
                 _.each(prefixes, function (prefix) {
                     var name = prefix + extensionName,
                         extension = context.getExtension(name);
 
                     if (!_.isNull(extension)) {
-                        this.availableExtensions[extensionName] = true;
-                        this.extensions[extensionName] = extension;
+                        availableExtensions[extensionName] = true;
+                        extensions[extensionName] = extension;
                         return false;
                     }
                 }, this);
             }, this);
+
+            this.set('availableExtensions', availableExtensions);
+            this.set('extensions', extensions);
         },
 
         extensionAvailable: function (name) {
-            return this.availableExtensions[name];
+            return this.get('availableExtensions.' + name);
         },
 
         getExtension: function (name) {
             if (this.extensionAvailable(name)) {
-                return this.extensions[name];
+                return this.get('extensions.' + name);
             }
         }
 
@@ -2138,10 +2523,10 @@ modules['gl/canvas/loader'] = (function (constants) {
     return {
 
         initializeLoader: function () {
-            if (_.isUndefined(this.loader)) {
+            if (_.isUndefined(this.get('loader'))) {
                 _.bindAll(this, 'resizeLoader', 'startLoader', 'stopLoader');
 
-                var canvas = this.canvas,
+                var canvas = this.get('canvas'),
                     wrapper = document.createElement('div'),
                     inner = document.createElement('div'),
                     style = constants.LOADER.STYLE;
@@ -2159,22 +2544,22 @@ modules['gl/canvas/loader'] = (function (constants) {
                 wrapper.appendChild(inner);
                 document.body.appendChild(wrapper);
 
-                this.loader = wrapper;
-                this.loaderInner = inner;
-                this.loaderRotation = 0;
+                this.set('loader', wrapper);
+                this.set('loaderInner', inner);
+                this.set('loaderRotation', 0);
 
-                this.listen(this, 'resize', this.resizeLoader);
-                this.listen(this, 'startLoading', this.startLoader);
-                this.listen(this, 'finishLoading', this.stopLoader);
+                this.listenTo(this, 'resize', this.resizeLoader);
+                this.listenTo(this, 'startLoading', this.startLoader);
+                this.listenTo(this, 'finishLoading', this.stopLoader);
                 this.resizeLoader();
             }
         },
 
         resizeLoader: function () {
-            if (!_.isUndefined(this.loader)) {
-                var loader = this.loader,
-                    canvas = this.canvas,
-                    rect = canvas.getBoundingClientRect();
+            var loader = this.get('loader');
+
+            if (!_.isUndefined(loader)) {
+                var rect = this.get('canvas').getBoundingClientRect();
 
                 _.each(rect, function (value, property) {
                     loader.style[property] = value + 'px';
@@ -2183,35 +2568,200 @@ modules['gl/canvas/loader'] = (function (constants) {
         },
 
         startLoader: function () {
-            if (!_.isUndefined(this.loader) &&
-                    _.isUndefined(this.loaderInterval)) {
+            var loader = this.get('loader'),
+                loaderInterval = this.get('loaderInterval');
 
-                this.loader.style.display = 'block';
+            if (!_.isUndefined(loader) && _.isUndefined(loaderInterval)) {
+                var loaderInner = this.get('loaderInner');
 
-                this.loaderInterval = root.setInterval((function () {
-                    this.loaderRotation += constants.LOADER.SPEED;
+                loader.style.display = 'block';
+
+                loaderInterval = root.setInterval((function () {
+                    var loaderRotation = this.get('loaderRotation') +
+                        constants.LOADER.SPEED;
+
+                    this.set('loaderRotation', loaderRotation);
 
                     _.each(
                         constants.LOADER.ROTATION_PROPERTIES,
                         function (property) {
-                            this.loaderInner.style[property] = 'rotate(' +
-                                this.loaderRotation + 'deg)';
+                            loaderInner.style[property] = 'rotate(' +
+                                loaderRotation + 'deg)';
                         },
                         this
                     );
 
                 }).bind(this), constants.LOADER.INTERVAL);
 
+                this.set('loaderInterval', loaderInterval);
             }
         },
 
         stopLoader: function () {
-            if (!_.isUndefined(this.loader) &&
-                    !_.isUndefined(this.loaderInterval)) {
-                this.loader.style.display = 'none';
-                root.clearInterval(this.loaderInterval);
+            var loader = this.get('loader'),
+                loaderInterval = this.get('loaderInterval');
+
+            if (!_.isUndefined(loader) && !_.isUndefined(loaderInterval)) {
+                loader.style.display = 'none';
+                root.clearInterval(loaderInterval);
+                this.set('loaderInterval');
             }
         }
+
+    };
+
+}) (modules['gl/canvas/constants']);
+
+modules['gl/canvas/fps-counter'] = (function (constants) {
+
+    return {
+
+        initializeFpsCounter: function () {
+            if (_.isUndefined(this.get('fpsCounter'))) {
+
+                _.bindAll(this, 'positionFpsCounter', 'updateFpsCounter');
+
+                var canvas = this.get('canvas'),
+                    wrapper = document.createElement('div'),
+                    leftTop = document.createElement('div'),
+                    rightTop = document.createElement('div'),
+                    leftBottom = document.createElement('div'),
+                    rightBottom = document.createElement('div'),
+                    graph = document.createElement('canvas'),
+                    graphContext = graph.getContext('2d'),
+                    style = constants.FPS_COUNTER.STYLE;
+
+                _.each(style.WRAPPER, function (value, property) {
+                    wrapper.style[property] = value;
+                });
+
+                _.each(style.GRAPH, function (value, property) {
+                    graph.style[property] = value;
+                });
+
+                _.each(style.INFO, function (value, property) {
+                    leftTop.style[property] = value;
+                    rightTop.style[property] = value;
+                    leftBottom.style[property] = value;
+                    rightBottom.style[property] = value;
+                });
+
+                _.each(style.INFO_HEADER, function (value, property) {
+                    leftTop.style[property] = value;
+                    rightTop.style[property] = value;
+                });
+
+                leftTop.innerHTML = 'INST';
+                rightTop.innerHTML = 'AVG';
+
+                wrapper.appendChild(leftTop);
+                wrapper.appendChild(rightTop);
+                wrapper.appendChild(leftBottom);
+                wrapper.appendChild(rightBottom);
+                wrapper.appendChild(graph);
+                document.body.appendChild(wrapper);
+
+                graph.width = graph.offsetWidth;
+                graph.height = graph.offsetHeight;
+
+                this.set('fpsCounter', {
+                    wrapper: wrapper,
+                    instant: leftBottom,
+                    average: rightBottom,
+                    frames: [],
+                    graph: graph,
+                    graphContext: graphContext,
+                    time: _.now(),
+                    sum: 0,
+                    count: 0
+                });
+
+                this.listenTo(this, 'resize', this.positionFpsCounter);
+                this.listenTo(this, 'finishRendering', this.updateFpsCounter);
+                this.positionFpsCounter();
+            }
+        },
+
+        positionFpsCounter: function () {
+            var wrapper = this.get('fpsCounter.wrapper');
+
+            if (!_.isUndefined(wrapper)) {
+                var rect = this.get('canvas').getBoundingClientRect();
+
+                wrapper.style.top = rect.top +
+                    constants.FPS_COUNTER.POSITION_OFFSET + 'px';
+                wrapper.style.left = (rect.left + rect.width -
+                    wrapper.offsetWidth -
+                    constants.FPS_COUNTER.POSITION_OFFSET)  + 'px';
+            }
+        },
+
+        updateFpsCounter: function () {
+            var data = this.get('fpsCounter'),
+                time = _.now(),
+                interval = time - data.time,
+                instantFps = 1000 / interval,
+                averageFps,
+                sum = 0,
+                context = data.graphContext,
+                i, x, height;
+
+            data.sum += instantFps;
+            data.count++;
+            data.time = time;
+
+            data.instant.innerHTML = Math.ceil(instantFps);
+
+            if (data.count === constants.FPS_COUNTER.FRAME_GROUP_COUNT) {
+                instantFps = data.sum / data.count;
+                data.sum = 0;
+                data.count = 0;
+
+                data.frames.push(instantFps);
+
+                if (data.frames.length > constants.FPS_COUNTER.FRAME_COUNT) {
+                    data.frames.shift();
+                }
+
+                // Drawing the graph.
+                context.clearRect(0, 0, data.graph.width, data.graph.height);
+
+                i = data.frames.length;
+                x = data.graph.width;
+                while (i--) {
+                    sum += data.frames[i];
+
+                    if (x > 0) {
+                        height = data.frames[i] * data.graph.height /
+                            constants.FPS_COUNTER.GRAPH.MAX_FPS;
+
+                        context.fillStyle = constants.FPS_COUNTER.GRAPH.COLOR;
+                        context.fillRect(
+                            x - constants.FPS_COUNTER.GRAPH.LINE_WIDTH,
+                            data.graph.height - height +
+                                constants.FPS_COUNTER.GRAPH.HIGHLIGHT_WIDTH,
+                            constants.FPS_COUNTER.GRAPH.LINE_WIDTH,
+                            height - constants.FPS_COUNTER.GRAPH.HIGHLIGHT_WIDTH
+                        );
+
+                        context.fillStyle =
+                            constants.FPS_COUNTER.GRAPH.HIGHLIGHT;
+                        context.fillRect(
+                            x - constants.FPS_COUNTER.GRAPH.LINE_WIDTH,
+                            data.graph.height - height,
+                            constants.FPS_COUNTER.GRAPH.LINE_WIDTH,
+                            constants.FPS_COUNTER.GRAPH.HIGHLIGHT_WIDTH
+                        );
+
+                        x -= constants.FPS_COUNTER.GRAPH.LINE_WIDTH;
+                    }
+                }
+
+                averageFps = sum / data.frames.length;
+
+                data.average.innerHTML = Math.ceil(averageFps);
+            }
+        },
 
     };
 
@@ -2241,24 +2791,26 @@ modules['utility/debug-output'] = (function () {
 }) ();
 
 
-modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,extendContext,loader,debugOutput,cursor) {
+modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rtt,postprocessing,extensions,extendContext,loader,fpsCounter,debugOutput,cursor) {
 
     return Class.extend(_.extend({
 
-        initialize: function (canvas, config) {
-            var context;
-
+        initialize: function (attributes, options) {
             _.bindAll(this, 'setScene', 'initializeScene', 'render', 'resize');
 
-            this.config = _.extend({}, namespace.config.CANVAS, config);
+            var canvas = this.get('canvas'),
+                context,
+                config = _.merge({}, namespace.config.CANVAS, options);
 
-            this.scenes = {};
+            this.set('config', config)
+                .set('scenes', {})
+                .set('rtt', { initialize: false, enabled: false })
+                .set('postprocessing', { initialize: false, enabled: false });
 
-            this.canvas = canvas;
             context = canvas.getContext('webgl') ||
                 canvas.getContext('experimental-webgl');
 
-            if (this.config.debug) {
+            if (config.debug) {
                 context = WebGLDebugUtils.makeDebugContext(context, undefined,
                     debugOutput);
             }
@@ -2267,44 +2819,64 @@ modules['gl/canvas'] = (function (namespace,Class,initialize,render,constants,rt
 
             extendContext(context);
 
-            this.context = context;
+            this.set('context', context);
 
             this.initializeExtensions();
 
-            if (this.config.preloadAnimation) {
+            if (config.preloadAnimation) {
                 this.initializeLoader();
             }
 
-            this.canvas.addEventListener('click', cursor.requestLock);
+            if (config.fpsCounter) {
+                this.initializeFpsCounter();
+            }
+
+            canvas.addEventListener('click', cursor.requestLock);
         },
 
-        setScene: function (scene, beforeFrame) {
+        setScene: function (scene, callbacks) {
 
-            this.scene = scene;
+            var scenes = this.get('scenes');
 
-            if (_.isUndefined(this.scenes[scene.uid])) {
-                this.scenes[scene.uid] = {};
+            this.set('currentScene', scene);
+
+            if (_.isUndefined(scenes[scene.uid])) {
+                scenes[scene.uid] = { callbacks: {} };
                 this.initializeScene(scene);
             }
 
-            this.scenes[scene.uid].beforeFrame = beforeFrame;
+            _.extend(scenes[scene.uid].callbacks, callbacks);
 
-            this.listen(scene, 'render', this.render);
+            this.listenTo(scene, 'render', this.render);
 
             return this;
         },
 
         useCamera: function (camera) {
-            camera.use(this.context);
+            camera.use(this.get('context'));
         },
 
         useProgram: function (program) {
-            program.use(this.context);
+            program.use(this.get('context'));
         }
 
-    }, initialize, render, rtt, postprocessing, extensions, loader));
+    },
+        initialize,
+        render,
+        rtt,
+        postprocessing,
+        extensions,
+        loader,
+        fpsCounter
+    ), {
 
-}) (modules['utility/namespace'],modules['utility/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['gl/canvas/extend-context'],modules['gl/canvas/loader'],modules['utility/debug-output'],modules['interaction/cursor']);
+        setConfig: function (config) {
+            _.extend(namespace.config.CANVAS, config);
+        }
+
+    });
+
+}) (modules['scaffolding/namespace'],modules['scaffolding/class'],modules['gl/canvas/initialize'],modules['gl/canvas/render'],modules['gl/canvas/constants'],modules['gl/canvas/rtt'],modules['gl/canvas/postprocessing'],modules['gl/canvas/extensions'],modules['gl/canvas/extend-context'],modules['gl/canvas/loader'],modules['gl/canvas/fps-counter'],modules['utility/debug-output'],modules['interaction/cursor']);
 
 
 modules['utility/load-file'] = (function () {
@@ -2367,67 +2939,74 @@ modules['shading/constants'] = {
 };
 
 
-modules['utility/node'] = (function (Class) {
+modules['scaffolding/node'] = (function (Class) {
 
     return Class.extend({
 
-        initialize: function (options) {
-            this.children = {};
-            this.scaleMatrix = glm.mat4.create();
-            this.rotationMatrix = glm.mat4.create();
-            this.position = glm.vec3.create();
+        defaults: {
+            children: {},
 
-            if (!_.isUndefined(options.camera)) {
-                this.camera = options.camera;
-                this.camera.setNode(this);
+            position: { x: 0, y: 0, z: 0 },
+            worldPosition: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+            rotation: { x: 0, y: 0, z: 0 }
+        },
+
+        attributeTypes: {
+            position: 'vec3',
+            scale: 'vec3',
+            rotation: 'vec3',
+            worldPosition: 'vec3'
+        },
+
+        set: function (key, value) {
+            switch (key) {
+                case 'camera':
+                case 'actor':
+                    if (!_.isUndefined(value)) {
+                        value.set('node', this);
+                    }
+                    break;
             }
 
-            if (!_.isUndefined(options.actor)) {
-                this.actor = options.actor;
-                this.actor.setNode(this);
-            }
+            return Class.prototype.set.call(this, key, value);
+        },
 
-            if (!_.isUndefined(options.material)) {
-                this.material = options.material;
-            }
+        initialize: function () {
+            this.set('localModelMatrix', glm.mat4.create())
+                .set('modelMatrix', glm.mat4.create());
+        },
 
-            if (!_.isUndefined(options.position)) {
-                this.setPosition(
-                    _.isNumber(options.position.x) ? options.position.x : 0,
-                    _.isNumber(options.position.y) ? options.position.y : 0,
-                    _.isNumber(options.position.z) ? options.position.z : 0
-                );
-            }
-
-            if (!_.isUndefined(options.scale)) {
-                this.setScale(
-                    _.isNumber(options.scale.x) ? options.scale.x : 1,
-                    _.isNumber(options.scale.y) ? options.scale.y : 1,
-                    _.isNumber(options.scale.z) ? options.scale.z : 1
-                );
-            }
+        addChild: function (child) {
+            this.get('children')[child.uid] = child;
         },
 
         render: function (context, resources) {
-            var textureUnits = [];
+            var textureUnits = [],
+                camera = this.get('camera'),
+                mesh, material, modelMatrix, texture, textures, alphaTexture;
 
-            if (context._currentCamera !== this.camera) {
-                if (!_.isUndefined(this.mesh)) {
-                    var program = context._currentProgram;
+            if (context._currentCamera !== camera) {
+                mesh = this.get('mesh');
+                material = this.get('material');
+                modelMatrix = this.get('modelMatrix');
+                texture = this.get('texture');
+                textures = this.get('textures');
+                alphaTexture = this.get('alphaTexture');
 
-                    context.uniformMatrix4fv('modelMat', false,
-                        this.modelMatrix);
+                if (!_.isUndefined(mesh)) {
+                    context.uniformMatrix4fv('modelMat', false, modelMatrix);
 
-                    if (!_.isUndefined(this.material)) {
-                        this.material.render(context);
+                    if (!_.isUndefined(material)) {
+                        material.render(context);
                     }
 
-                    if (!_.isUndefined(this.texture)) {
-                        resources.allTextures[this.texture].render(
+                    if (!_.isUndefined(texture)) {
+                        resources.allTextures[texture].render(
                             textureUnits.length);
                         textureUnits.push(textureUnits.length);
-                    } else if (!_.isUndefined(this.textures)) {
-                        _.each(this.textures, function (texture) {
+                    } else if (!_.isUndefined(textures)) {
+                        _.each(textures, function (texture) {
                             resources.allTextures[texture].render(
                                 textureUnits.length);
                             textureUnits.push(textureUnits.length);
@@ -2444,218 +3023,119 @@ modules['utility/node'] = (function (Class) {
                         context.uniform1i('textured', 0);
                     }
 
-                    if (!_.isUndefined(this.alphaTexture)) {
+                    if (!_.isUndefined(alphaTexture)) {
                         context.uniform1i('alphaTextured', 1);
 
-                        resources.allTextures[this.alphaTexture]
+                        resources.allTextures[alphaTexture]
                             .render(textureUnits.length, 'alphaTexture');
                     } else {
                         context.uniform1i('alphaTextured', 0);
                     }
 
-                    resources.allMeshes[this.mesh].render();
+                    resources.allMeshes[mesh].render();
                 }
             }
 
-            _.each(this.children, function (child) {
+            _.each(this.get('children'), function (child) {
                 child.render(context, resources);
             }, this);
         },
 
         prepareRender: function (parentModelMatrix) {
-            var localModelMatrix = glm.mat4.create(),
-                translationMatrix = glm.mat4.translate([], glm.mat4.create(),
-                    this.position);
+            var localModelMatrix = this.updateModelMatrix(),
+                modelMatrix = this.get('modelMatrix'),
+                position = this.get('position'),
+                camera = this.get('camera');
 
-            parentModelMatrix = parentModelMatrix || glm.mat4.create();
-
-            glm.mat4.multiply(localModelMatrix, this.rotationMatrix,
-                this.scaleMatrix);
-
-            glm.mat4.multiply(localModelMatrix, translationMatrix,
-                localModelMatrix);
-
-            glm.mat4.multiply(localModelMatrix, parentModelMatrix,
-                localModelMatrix);
-
-            if (!_.isUndefined(this.camera)) {
-                this.camera.prepareRender(parentModelMatrix);
+            if (_.isUndefined(parentModelMatrix)) {
+                glm.mat4.copy(modelMatrix, localModelMatrix);
+            } else {
+                glm.mat4.multiply(modelMatrix, parentModelMatrix,
+                    localModelMatrix);
             }
 
-            this.modelMatrix = localModelMatrix;
+            if (!_.isUndefined(camera)) {
+                camera.prepareRender(parentModelMatrix);
+            }
 
-            _.each(this.children, function (child) {
-                child.prepareRender(localModelMatrix);
+            glm.vec3.transformMat4(this.get('worldPosition'), position,
+                modelMatrix);
+
+            _.each(this.get('children'), function (child) {
+                child.prepareRender(modelMatrix);
             }, this);
+
+            // if (!_.isUndefined(this.billboard)) {
+            //     this.billboard.prepareRender();
+            // }
         },
 
-        addChild: function (child) {
-            this.children[child.uid] = child;
-        },
+        updateModelMatrix: function () {
+            var localModelMatrix = this.get('localModelMatrix'),
+                rotation = this.get('rotation');
 
-        move: function () {
-            var displacement;
+            glm.mat4.identity(localModelMatrix);
 
-            if (arguments.length === 1) {
-                displacement = arguments[0];
-            } else {
-                displacement = [
-                    arguments[0] || 0,
-                    arguments[1] || 0,
-                    arguments[2] || 0,
-                ];
-            }
+            glm.mat4.translate(localModelMatrix, localModelMatrix,
+                this.get('position'));
 
-            glm.vec3.add(this.position, this.position, displacement);
-            this.trigger('change:position');
-        },
-        moveX: function (x) { this.move(x, 0, 0); },
-        moveY: function (y) { this.move(0, y, 0); },
-        moveZ: function (z) { this.move(0, 0, z); },
+            glm.mat4.rotateX(localModelMatrix, localModelMatrix,
+                glm.glMatrix.toRadian(rotation[0]));
+            glm.mat4.rotateY(localModelMatrix, localModelMatrix,
+                glm.glMatrix.toRadian(rotation[1]));
+            glm.mat4.rotateZ(localModelMatrix, localModelMatrix,
+                glm.glMatrix.toRadian(rotation[2]));
 
-        setPosition: function () {
-            glm.vec3.set(this.position, 0, 0, 0);
-            this.move.apply(this, arguments);
-        },
-        setPositionX: function (x) { this.setPosition(x, 0, 0); },
-        setPositionY: function (y) { this.setPosition(0, y, 0); },
-        setPositionZ: function (z) { this.setPosition(0, 0, z); },
+            glm.mat4.scale(localModelMatrix, localModelMatrix,
+                this.get('scale'));
 
-
-        scale: function (x, y, z) {
-            glm.mat4.scale(this.scaleMatrix, this.scaleMatrix, [x || 1,
-                y || 1, z || 1]);
-            this.trigger('change:scale');
-        },
-        scaleX: function (x) { this.scale(x, 1, 1); },
-        scaleY: function (y) { this.scale(1, y, 1); },
-        scaleZ: function (z) { this.scale(1, 1, z); },
-
-        setScale: function (x, y, z) {
-            glm.mat4.identity(this.scaleMatrix);
-            this.scale(x, y, z);
-        },
-        setScaleX: function (x) { this.setScale(x, 1, 1); },
-        setScaleY: function (y) { this.setScale(1, y, 1); },
-        setScaleZ: function (z) { this.setScale(1, 1, z); },
-
-
-        rotate: function (rad, axis) {
-            glm.mat4.rotate(this.rotationMatrix, this.rotationMatrix,
-                rad || 0, axis);
-            this.trigger('change:rotation');
-        },
-        rotateX: function (rad) {
-            glm.mat4.rotateX(this.rotationMatrix, this.rotationMatrix,
-                rad || 0);
-            this.trigger('change:rotation');
-        },
-        rotateY: function (rad) {
-            glm.mat4.rotateY(this.rotationMatrix, this.rotationMatrix,
-                rad || 0);
-            this.trigger('change:rotation');
-        },
-        rotateZ: function (rad) {
-            glm.mat4.rotateZ(this.rotationMatrix, this.rotationMatrix,
-                rad || 0);
-            this.trigger('change:rotation');
-        },
-
-        setRotation: function (rad, axis) {
-            glm.mat4.identity(this.rotationMatrix);
-            this.rotate(rad, axis);
-        },
-        setRotationX: function (rad) {
-            glm.mat4.identity(this.rotationMatrix);
-            this.rotateX(rad);
-        },
-        setRotationY: function (rad) {
-            glm.mat4.identity(this.rotationMatrix);
-            this.rotateY(rad);
-        },
-        setRotationZ: function (rad) {
-            glm.mat4.identity(this.rotationMatrix);
-            this.rotateZ(rad);
-        },
-    });
-
-}) (modules['utility/class']);
-
-
-modules['utility/color'] = (function (Class) {
-
-    return Class.extend({
-        initialize: function() {
-            if (arguments.length == 1) {
-                this.r = arguments[0].r || 0;
-                this.g = arguments[0].g || 0;
-                this.b = arguments[0].b || 0;
-            } else {
-                this.r = arguments[0] || 0;
-                this.g = arguments[1] || 0;
-                this.b = arguments[2] || 0;
-            }
-        },
-
-        flat: function () {
-            return [this.r, this.g, this.b];
+            return localModelMatrix;
         }
     });
 
-}) (modules['utility/class']);
+}) (modules['scaffolding/class']);
 
 
 modules['shading/point'] = (function (constants,Class,Color) {
 
     return Class.extend({
 
-        initialize: function (options) {
-            this.color = new Color(options.color);
-            this.radius = options.radius;
+        attributeTypes: {
+            'color': 'color'
         },
 
         output: function () {
             return {
-                position: this.node.position,
+                position: this.get('node').get('position'),
                 type: constants.TYPE_RAW.POINT,
-                color: this.color,
-                radius: this.radius
+                color: this.get('color'),
+                radius: this.get('radius')
             };
-        },
-
-        setNode: function (node) {
-            this.node = node;
         }
 
     });
 
-}) (modules['shading/constants'],modules['utility/class'],modules['utility/color']);
+}) (modules['shading/constants'],modules['scaffolding/class'],modules['utility/color']);
 
 
 modules['shading/spot'] = (function (constants,Point) {
 
     return Point.extend({
 
-        initialize: function (options) {
-            Point.prototype.initialize.apply(this, arguments);
+        defaults: {
+            direction: { x: 0, y: -1, z: 0 }
+        },
 
-            this.angleInner = options.angleInner;
-            this.angleOuter = options.angleOuter;
-
-            if (_.isUndefined(options.direction)) {
-                this.direction = glm.vec3.fromValues(0, -1, 0);
-            } else {
-                this.direction = glm.vec3.fromValues(options.direction. x || 0,
-                    options.direction.y || -1, options.direction.z || 0);
-            }
+        attributeTypes: {
+            'direction': 'vec3'
         },
 
         output: function () {
             return _.extend({
                 type: constants.TYPE_RAW.SPOT,
-                angleInner: this.angleInner,
-                angleOuter: this.angleOuter,
-                direction: this.direction
+                angleInner: this.get('angleInner'),
+                angleOuter: this.get('angleOuter'),
+                direction: this.get('direction')
             }, Point.prototype.output.apply(this, arguments));
         }
 
@@ -2664,45 +3144,46 @@ modules['shading/spot'] = (function (constants,Point) {
 }) (modules['shading/constants'],modules['shading/point']);
 
 
-modules['shading/material'] = (function (Class,Color) {
+modules['shading/material'] = (function (Class) {
 
     return Class.extend({
 
-        initialize: function (options) {
-            this.shininess = options.shininess;
-
-            _.each(
-                ['emissive', 'ambient', 'diffuse', 'specular'],
-                function (component) {
-                    this[component] = new Color(options[component]);
-                },
-                this
-            );
+        attributeTypes: {
+            'emissive': 'color',
+            'ambient': 'color',
+            'diffuse': 'color',
+            'specular': 'color'
         },
 
         render: function (context) {
-            var program = context._currentProgram;
+            var program = context._currentProgram,
+                emissive = this.get('emissive'),
+                ambient = this.get('ambient'),
+                diffuse = this.get('diffuse'),
+                specular = this.get('specular');
 
-            context.uniform1f('materialShininess', this.shininess);
-            context.uniform3f('materialEmissiveK', this.emissive.r,
-                this.emissive.g, this.emissive.b);
-            context.uniform3f('materialAmbientK', this.ambient.r,
-                this.ambient.g, this.ambient.b);
-            context.uniform3f('materialDiffuseK', this.diffuse.r,
-                this.diffuse.g, this.diffuse.b);
-            context.uniform3f('materialSpecularK', this.specular.r,
-                this.specular.g, this.specular.b);
+            context.uniform1f('materialShininess', this.get('shininess'));
+            context.uniform3f('materialEmissiveK', emissive.r,
+                emissive.g, emissive.b);
+            context.uniform3f('materialAmbientK', ambient.r,
+                ambient.g, ambient.b);
+            context.uniform3f('materialDiffuseK', diffuse.g,
+                diffuse.g, diffuse.b);
+            context.uniform3f('materialSpecularK', specular.r,
+                specular.g, specular.b);
         }
 
     });
 
-}) (modules['utility/class'],modules['utility/color']);
-modules['utility/scene/load'] = (function (loadFile,programConstants,geometryConstants,lightingConstants,Node,Actor,Camera,LightPoint,LightSpot,Color,Material) {
+}) (modules['scaffolding/class']);
+modules['scaffolding/scene/load'] = (function (loadFile,programConstants,geometryConstants,lightingConstants,Node,Actor,Camera,LightPoint,LightSpot,Color,Material) {
 
     return {
 
         load: function (schema) {
-            var parsedSchema, sources;
+            var parsedSchema, sources,
+                resourceCount = 0,
+                config = this.get('config');
 
             sources = {
                 meshNames: schema.meshes,
@@ -2732,7 +3213,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
                 tree: []
             };
-            this.sources = sources;
+            this.set('sources', sources);
 
             // Grab resource information.
             parsedSchema = {
@@ -2740,7 +3221,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 texturePaths: [],
                 shaderPaths: []
             };
-            this.parsedSchema = parsedSchema;
+            this.set('parsedSchema', parsedSchema);
 
             // Postprocessing.
             if (!_.isUndefined(schema.postprocessing)) {
@@ -2779,7 +3260,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
                     if (_.isPlainObject(options)) {
                         _.each(options, function (path, key) {
-                            options[key] = this.config.paths.shaders + path;
+                            options[key] = config.paths.shaders + path;
                         }, this);
 
                         schema.programs[name] = options;
@@ -2794,8 +3275,6 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                     });
                 }
             }, this);
-
-
 
             // Meshes.
             _.each(schema.meshes, function (path) {
@@ -2823,11 +3302,10 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             _.each(schema.tree, this.parseNode, this);
 
             // Instantiate async resources.
-            this.resourceCount = 0;
-
-            this.resourceCount += parsedSchema.shaderPaths.length;
-            this.resourceCount += parsedSchema.meshPaths.length;
-            this.resourceCount += parsedSchema.texturePaths.length;
+            resourceCount += parsedSchema.shaderPaths.length;
+            resourceCount += parsedSchema.meshPaths.length;
+            resourceCount += parsedSchema.texturePaths.length;
+            this.set('resourceCount', resourceCount);
 
             this.loadAsyncResources(parsedSchema.shaderPaths, this.loadShader);
             this.loadAsyncResources(parsedSchema.meshPaths, this.loadMesh);
@@ -2835,20 +3313,20 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 this.loadTexture);
 
             // Global material constants.
-            this.sources.ambientLight = new Color(schema.ambientLight);
+            sources.ambientLight = new Color(schema.ambientLight);
 
-            if (!_.isUndefined(schema.backgroundColor))
-                this.sources.backgroundColor =
-                    new Color(schema.backgroundColor);
+            if (!_.isUndefined(schema.backgroundColor)) {
+                sources.backgroundColor = new Color(schema.backgroundColor);
+            }
 
             // Instantiate tree.
-            this.sources.tree = {
-                object: new Node({}),
+            sources.tree = {
+                object: new Node(),
                 children: []
             };
 
             _.each(schema.tree, function (node) {
-                this.instantiateNode(this.sources.tree, node);
+                this.instantiateNode(sources.tree, node);
             }, this);
         },
 
@@ -2867,13 +3345,16 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
         },
 
         parseNode: function (node) {
+            var sources = this.get('sources'),
+                parsedSchema = this.get('parsedSchema');
+
             if (!_.isUndefined(node.mesh) && _.isString(node.mesh)) {
-                if (node.mesh in this.sources.meshNames) {
-                    node.mesh = this.sources.meshNames[node.mesh];
+                if (node.mesh in sources.meshNames) {
+                    node.mesh = sources.meshNames[node.mesh];
                 } else {
-                    if (_.indexOf(this.parsedSchema.meshPaths,
+                    if (_.indexOf(parsedSchema.meshPaths,
                             node.mesh) === -1) {
-                        this.parsedSchema.meshPaths.push(node.mesh);
+                        parsedSchema.meshPaths.push(node.mesh);
                     }
                 }
             }
@@ -2901,18 +3382,19 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
         },
 
         parseTexture: function (options) {
-            if (_.isString(options) &&
-                    options in this.sources.textureNames) {
-                return this.sources.textureNames[options];
-            } else if (_.isPlainObject(options)) {
-                this.sources.textureOptions.push(options);
+            var sources = this.get('sources'),
+                parsedSchema = this.get('parsedSchema');
 
-                if (_.indexOf(this.parsedSchema.texturePaths,
-                        options.path) === -1) {
-                    this.parsedSchema.texturePaths.push(options.path);
+            if (_.isString(options) && options in sources.textureNames) {
+                return sources.textureNames[options];
+            } else if (_.isPlainObject(options)) {
+                sources.textureOptions.push(options);
+
+                if (_.indexOf(parsedSchema.texturePaths, options.path) === -1) {
+                    parsedSchema.texturePaths.push(options.path);
                 }
 
-                return this.parsedSchema.texturePaths.length - 1;
+                return parsedSchema.texturePaths.length - 1;
             }
         },
 
@@ -2928,7 +3410,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                     break;
             }
 
-            this.sources.lights.push(light);
+            this.get('sources.lights').push(light);
 
             return light;
         },
@@ -2938,7 +3420,9 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                     name: options.name,
                     children: []
                 },
-                light;
+                light,
+                sources = this.get('sources'),
+                children = options.children;
 
             // Set mesh.
             if (!_.isUndefined(options.mesh)) {
@@ -2948,7 +3432,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 if (!_.isUndefined(options.material)) {
                     options.material = this.instantiateNodeProperty(
                         options.material,
-                        this.sources.materials,
+                        sources.materials,
                         function (options) { return options; },
                         function (options) {
                             return new Material(options);
@@ -2963,40 +3447,42 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
             // Instantiate actor.
             options.actor = this.instantiateNodeProperty(options.actor,
-                this.sources.actorOptions, function (options) {
+                sources.actorOptions, function (options) {
                     var actor = new Actor(options);
 
-                    this.sources.actors.push(actor);
+                    sources.actors.push(actor);
 
                     return actor;
                 });
 
             // Instantiate camera.
             options.camera = this.instantiateNodeProperty(options.camera,
-                this.sources.cameraOptions, function (options) {
+                sources.cameraOptions, function (options) {
                     var camera = new Camera(options);
 
-                    this.sources.cameras.push(camera);
+                    sources.cameras.push(camera);
                     if (options.default) {
-                        this.sources.defaultCamera = camera;
+                        sources.defaultCamera = camera;
                     }
 
                     return camera;
                 });
+
+            delete options.children;
 
             // Instantiate node.
             node.object = new Node(options);
 
             // Instantiate light.
             light = this.instantiateNodeProperty(options.light,
-                this.sources.lightOptions, this.instantiateLight);
+                sources.lightOptions, this.instantiateLight);
 
             if (!_.isUndefined(light)) {
-                light.setNode(node.object);
+                light.set('node', node.object);
             }
 
-            if (!_.isUndefined(options.children) && _.isArray(options.children)) {
-                _.each(options.children, function (child) {
+            if (!_.isUndefined(children) && _.isArray(children)) {
+                _.each(children, function (child) {
                     this.instantiateNode(node, child);
                 }, this);
             }
@@ -3021,11 +3507,15 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
         },
 
         resourceLoaded: function () {
-            this.resourceCount--;
+            var resourceCount = this.get('resourceCount');
 
-            if (this.resourceCount <= 0) {
-                this.loading = false;
+            resourceCount--;
+
+            if (resourceCount <= 0) {
+                this.set('loading', false);
                 this.trigger('loaded');
+            } else {
+                this.set('resourceCount', resourceCount);
             }
         },
 
@@ -3038,7 +3528,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
 
         loadShader: function (path) {
             loadFile(path, (function (source) {
-                this.sources.shaders[path] = source;
+                this.get('sources.shaders')[path] = source;
                 this.resourceLoaded();
             }).bind(this));
         },
@@ -3050,13 +3540,13 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
                 var splitPath = options.source.split('.');
 
                 if (splitPath[1] in geometryConstants.MESHES) {
-                    path = this.config.paths.meshes +
+                    path = this.get('config.paths.meshes') +
                         geometryConstants.MESHES[splitPath[1]];
                 }
             }
 
             loadFile(path, (function (source) {
-                this.sources.meshSources[originalPath] = source;
+                this.get('sources.meshSources')[originalPath] = source;
                 this.resourceLoaded();
             }).bind(this));
         },
@@ -3065,7 +3555,7 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
             var image = new Image();
 
             image.addEventListener('load', (function () {
-                this.sources.textureSources[path] = image;
+                this.get('sources.textureSources')[path] = image;
                 this.resourceLoaded();
             }).bind(this));
 
@@ -3073,107 +3563,132 @@ modules['utility/scene/load'] = (function (loadFile,programConstants,geometryCon
         }
 
     };
-}) (modules['utility/load-file'],modules['gl/program/constants'],modules['geometry/constants'],modules['shading/constants'],modules['utility/node'],modules['interaction/actor'],modules['interaction/camera'],modules['shading/point'],modules['shading/spot'],modules['utility/color'],modules['shading/material']);
+}) (modules['utility/load-file'],modules['gl/program/constants'],modules['geometry/constants'],modules['shading/constants'],modules['scaffolding/node'],modules['interaction/actor'],modules['interaction/camera'],modules['shading/point'],modules['shading/spot'],modules['utility/color'],modules['shading/material']);
+
+modules['utility/animation-frame'] = (function () {
+
+    var lastTime = 0,
+        vendors = ['webkit', 'moz'],
+        requestAnimationFrame = root.requestAnimationFrame,
+        cancelAnimationFrame = root.cancelAnimationFrame;
+
+    _.each(vendors, function (vendor) {
+        if (_.isUndefined(requestAnimationFrame)) {
+            requestAnimationFrame = root[vendor + 'RequestAnimationFrame'];
+
+            cancelAnimationFrame = root[vendor + 'CancelAnimationFrame'];
+        }
+    });
+
+    if (_.isUndefined(requestAnimationFrame)) {
+        requestAnimationFrame = function(callback, element) {
+            var currentTime = new Date().getTime(),
+                timeToCall = Math.max(0, 16 - (currentTime - lastTime)),
+                id;
+
+            id = setTimeout(function () {
+                callback(currTime + timeToCall);
+            }, timeToCall);
+
+            lastTime = currentTime + timeToCall;
+
+            return id;
+        };
+    }
+
+    if (_.isUndefined(cancelAnimationFrame)) {
+        cancelAnimationFrame = function (id) {
+            clearTimeout(id);
+        };
+    }
+
+    return {
+        request: requestAnimationFrame.bind(root),
+        cancel: cancelAnimationFrame.bind(root)
+    };
+
+}) ();
 
 
-modules['utility/scene'] = (function (Class,namespace,load,loadFile) {
+modules['scaffolding/scene'] = (function (Class,namespace,load,loadFile,animationFrame) {
 
     return Class.extend(_.extend({
 
-        initialize: function (path, config) {
-            this.config = _.merge({}, namespace.config.SCENE, config);
+        initialize: function (attributes, options) {
+            _.bindAll(this, 'resourceLoaded', 'render');
+
+            var path = this.get('source'),
+                config = _.merge({}, namespace.config.SCENE, options);
+
+            this.set('config', config)
+                .set('loading', true);
 
             loadFile(path, (function (raw) {
                 this.load(JSON.parse(raw));
             }).bind(this));
-
-            this.loading = true;
-
-            _.bindAll(this, 'resourceLoaded', 'render');
-
-            return this;
         },
 
         startRendering: function () {
-            if (_.isUndefined(this.request)) {
-                root.cancelAnimationFrame(this.request);
+            var request = this.get('request');
+
+            if (!_.isUndefined(request)) {
+                animationFrame.cancel(request);
             }
 
-            this.previousTime = 0;
-            this.request = root.requestAnimationFrame(this.render);
+            this.set('previousTime', 0)
+                .set('request', animationFrame.request(this.render));
 
             return this;
         },
 
         render: function (currentTime) {
-            var interval = (currentTime - this.previousTime) / 1000;
+            var interval = (currentTime - this.get('previousTime')) / 1000;
 
             if (this.isLoaded()) {
+                var sources = this.get('sources');
 
-                _.each(this.sources.actors, function (actor) {
+                _.each(sources.actors, function (actor) {
                     actor.update(interval);
-                }, this);
+                });
 
-                _.each(this.sources.cameras, function (camera) {
+                _.each(sources.cameras, function (camera) {
                     camera.update(interval);
-                }, this);
+                });
 
-                this.sources.tree.object.prepareRender();
+                sources.tree.object.prepareRender();
             }
 
-            this.trigger('render', { interval: interval });
-            this.previousTime = currentTime;
-            this.request = requestAnimationFrame(this.render);
+            this.trigger('render', { interval: interval })
+                .set('previousTime', currentTime)
+                .set('request', animationFrame.request(this.render));
         },
 
         isLoaded: function () {
-            return !this.loading;
+            return !this.get('loading');
         }
 
-    }, load));
+    }, load), {
 
-}) (modules['utility/class'],modules['utility/namespace'],modules['utility/scene/load'],modules['utility/load-file']);
-
-modules['utility/config'] = (function (Color) {
-    var config = {
-        CANVAS: {
-            debug: false,
-            backgroundColor: new Color(0, 0, 0),
-            preloadAnimation: true
-        },
-
-        SCENE: {
-            paths: {
-                meshes: '/masala/meshes/',
-                shaders: '/masala/shaders/'
-            }
-        }
-    };
-
-    return config;
-}) (modules['utility/color']);
-
-
-modules['main'] = (function (namespace,Canvas,Scene,config) {
-
-    _.extend(namespace, {
-
-        Canvas: Canvas,
-
-        Scene: Scene,
-
-        config: config,
-
-        setCanvasConfig: function (newConfig) {
-            _.merge(namespace.config.CANVAS, newConfig);
-        },
-
-        setSceneConfig: function (newConfig) {
-            _.merge(namespace.config.SCENE, newConfig);
+        setConfig: function (config) {
+            _.extend(namespace.config.SCENE, config);
         }
 
     });
 
-}) (modules['utility/namespace'],modules['gl/canvas'],modules['utility/scene'],modules['utility/config']);
+}) (modules['scaffolding/class'],modules['scaffolding/namespace'],modules['scaffolding/scene/load'],modules['utility/load-file'],modules['utility/animation-frame']);
 
+
+modules['main'] = (function (Canvas,Scene) {
+
+    return {
+
+        Canvas: Canvas,
+
+        Scene: Scene
+
+    };
+
+}) (modules['gl/canvas'],modules['scaffolding/scene']);
+
+    return modules['main'];
 });

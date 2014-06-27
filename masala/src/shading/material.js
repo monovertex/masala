@@ -1,36 +1,34 @@
 
 
 define([
-    'utility/class',
-    'utility/color'
-], function (Class, Color) {
+    'scaffolding/class'
+], function (Class) {
 
     return Class.extend({
 
-        initialize: function (options) {
-            this.shininess = options.shininess;
-
-            _.each(
-                ['emissive', 'ambient', 'diffuse', 'specular'],
-                function (component) {
-                    this[component] = new Color(options[component]);
-                },
-                this
-            );
+        attributeTypes: {
+            'emissive': 'color',
+            'ambient': 'color',
+            'diffuse': 'color',
+            'specular': 'color'
         },
 
         render: function (context) {
-            var program = context._currentProgram;
+            var program = context._currentProgram,
+                emissive = this.get('emissive'),
+                ambient = this.get('ambient'),
+                diffuse = this.get('diffuse'),
+                specular = this.get('specular');
 
-            context.uniform1f('materialShininess', this.shininess);
-            context.uniform3f('materialEmissiveK', this.emissive.r,
-                this.emissive.g, this.emissive.b);
-            context.uniform3f('materialAmbientK', this.ambient.r,
-                this.ambient.g, this.ambient.b);
-            context.uniform3f('materialDiffuseK', this.diffuse.r,
-                this.diffuse.g, this.diffuse.b);
-            context.uniform3f('materialSpecularK', this.specular.r,
-                this.specular.g, this.specular.b);
+            context.uniform1f('materialShininess', this.get('shininess'));
+            context.uniform3f('materialEmissiveK', emissive.r,
+                emissive.g, emissive.b);
+            context.uniform3f('materialAmbientK', ambient.r,
+                ambient.g, ambient.b);
+            context.uniform3f('materialDiffuseK', diffuse.g,
+                diffuse.g, diffuse.b);
+            context.uniform3f('materialSpecularK', specular.r,
+                specular.g, specular.b);
         }
 
     });

@@ -3,125 +3,82 @@ define([
     'interaction/actor/constants'
 ], function (constants) {
 
+    var defaults = constants.DEFAULTS.MOVEMENT;
+
     return {
 
-        initializeMovement: function (options) {
-            var defaults = constants.DEFAULTS.MOVEMENT;
-
-            this.movementSpeed = { x: 0, y: 0, z: 0 };
-            this.movementControlToggle = {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-            this.movementToggle =  {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-            this.accelerationToggle =  { x: false, y: false, z: false };
-
-            this.minimumSpeed = {
-                x: defaults.MINIMUM_SPEED,
-                y: defaults.MINIMUM_SPEED,
-                z: defaults.MINIMUM_SPEED
-            };
-
-            this.maximumSpeed = {
-                x: defaults.MAXIMUM_SPEED,
-                y: defaults.MAXIMUM_SPEED,
-                z: defaults.MAXIMUM_SPEED
-            };
-
-            this.acceleration = {
-                x: defaults.ACCELERATION,
-                y: defaults.ACCELERATION,
-                z: defaults.ACCELERATION
-            };
-
-            this.deceleration = {
-                x: defaults.ACCELERATION,
-                y: defaults.ACCELERATION,
-                z: defaults.ACCELERATION
-            };
-
-            if (!_.isUndefined(options.speed)) {
-                this.setDefaultValues(options.speed.min, this.minimumSpeed);
-                this.setDefaultValues(options.speed.max, this.maximumSpeed);
+        defaults: {
+            movementSpeed: 0,
+            movementControlToggle:  constants.NO_MOVEMENT,
+            movementToggle: constants.NO_MOVEMENT,
+            accelerationToggle: false,
+            acceleration: defaults.ACCELERATION,
+            deceleration: defaults.ACCELERATION,
+            speed: {
+                max: defaults.MAXIMUM_SPEED,
+                min: defaults.MINIMUM_SPEED
             }
+        },
 
-            this.setDefaultValues(options.acceleration, this.acceleration);
-            this.setDefaultValues(options.deceleration, this.deceleration);
+        attributeTypes: {
+            'movementSpeed': 'xyz',
+            'movementControlToggle': 'xyz',
+            'movementToggle': 'xyz',
+            'accelerationToggle': 'xyz',
 
-            // Directional vectors.
-            if (this.checkVector(options.forward)) {
-                this.forward = glm.vec3.fromValues(options.forward.x,
-                    options.forward.y, options.forward.z);
-                glm.vec3.normalize(this.forward, this.forward);
-            } else {
-                this.forward = glm.vec3.fromValues(1, 0, 0);
-            }
-
-            if (this.checkVector(options.up)) {
-                this.up = glm.vec3.fromValues(options.up.x,
-                    options.up.y, options.up.z);
-                glm.vec3.normalize(this.up, this.up);
-            } else {
-                this.up = glm.vec3.fromValues(0, 1, 0);
-            }
-
-            this.right = glm.vec3.create();
-            glm.vec3.cross(this.right, this.forward, this.up);
-            glm.vec3.normalize(this.right, this.right);
-
-            glm.vec3.cross(this.up, this.right, this.forward);
-            glm.vec3.normalize(this.up, this.up);
+            'speed.max': 'xyz',
+            'speed.min': 'xyz',
+            'acceleration': 'xyz',
+            'deceleration': 'xyz'
         },
 
         updateMovement: function (interval) {
+            var movementToggle = this.get('movementToggle'),
+                accelerationToggle = this.get('accelerationToggle'),
+                movementSpeed = this.get('movementSpeed'),
+                minSpeed = this.get('speed.min'),
+                maxSpeed = this.get('speed.max'),
+                acceleration = this.get('acceleration'),
+                deceleration = this.get('deceleration'),
+                movementControlToggle = this.get('movementControlToggle');
 
             _.each(['x', 'y', 'z'], function (axis) {
                 var distance;
 
-                if (this.movementToggle[axis] !== constants.NO_MOVEMENT) {
-                    if (this.accelerationToggle[axis]) {
-                        if (this.movementSpeed[axis] <
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] = this.minimumSpeed[axis];
+                if (movementToggle[axis] !== constants.NO_MOVEMENT) {
+                    if (accelerationToggle[axis]) {
+                        if (movementSpeed[axis] < minSpeed[axis]) {
+                            movementSpeed[axis] = minSpeed[axis];
                         }
 
-                        if (this.movementSpeed[axis] <
-                                this.maximumSpeed[axis]) {
-                            this.movementSpeed[axis] += (interval *
-                                this.acceleration[axis]);
+                        if (movementSpeed[axis] < maxSpeed[axis]) {
+                            movementSpeed[axis] += (interval *
+                                acceleration[axis]);
                         }
 
-                        if (this.movementSpeed[axis] >
-                                this.maximumSpeed[axis]) {
-                            this.movementSpeed[axis] = this.maximumSpeed[axis];
+                        if (movementSpeed[axis] > maxSpeed[axis]) {
+                            movementSpeed[axis] = maxSpeed[axis];
                         }
                     } else {
-                        if (this.movementSpeed[axis] >
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] -= (interval *
-                                this.deceleration[axis]);
+                        if (movementSpeed[axis] > minSpeed[axis]) {
+                            movementSpeed[axis] -= (interval *
+                                deceleration[axis]);
 
-                            if (this.movementControlToggle[axis] !==
+                            if (movementControlToggle[axis] !==
                                     constants.NO_MOVEMENT) {
-                                this.movementSpeed[axis] -= (interval *
-                                    this.acceleration[axis]);
+                                movementSpeed[axis] -= (interval *
+                                    acceleration[axis]);
                             }
                         }
 
-                        if (this.movementSpeed[axis] <
-                                this.minimumSpeed[axis]) {
-                            this.movementSpeed[axis] = 0;
+                        if (movementSpeed[axis] < minSpeed[axis]) {
+                            movementSpeed[axis] = 0;
                         }
                     }
 
-                    if (this.movementSpeed[axis] > this.minimumSpeed[axis]) {
-                        distance = interval * this.movementSpeed[axis] *
-                            this.movementToggle[axis];
+                    if (movementSpeed[axis] > minSpeed[axis]) {
+                        distance = interval * movementSpeed[axis] *
+                            movementToggle[axis];
 
                         switch (axis) {
                             case 'x': this.moveForward(distance); break;
@@ -129,48 +86,43 @@ define([
                             case 'z': this.moveRight(distance); break;
                         }
                     } else {
-                        this.movementToggle[axis] = constants.NO_MOVEMENT;
+                        movementToggle[axis] = constants.NO_MOVEMENT;
                     }
                 }
 
-                if (this.movementToggle[axis] === constants.NO_MOVEMENT &&
-                        this.movementControlToggle[axis] !==
-                        constants.NO_MOVEMENT) {
-                    this.movementToggle[axis] =
-                        this.movementControlToggle[axis];
+                if (movementToggle[axis] === constants.NO_MOVEMENT &&
+                        movementControlToggle[axis] !== constants.NO_MOVEMENT) {
+                    movementToggle[axis] = movementControlToggle[axis];
                 }
 
-                if (this.movementToggle[axis] ===
-                        this.movementControlToggle[axis]) {
-                    this.accelerationToggle[axis] = true;
+                if (movementToggle[axis] === movementControlToggle[axis]) {
+                    accelerationToggle[axis] = true;
                 }
 
-                if (this.movementControlToggle[axis] ===
-                        constants.NO_MOVEMENT) {
-                    this.accelerationToggle[axis] = false;
+                if (movementControlToggle[axis] === constants.NO_MOVEMENT) {
+                    accelerationToggle[axis] = false;
                 }
 
             }, this);
         },
 
         move: function (direction, distance) {
-            glm.vec3.add(
-                this.node.position,
-                this.node.position,
-                glm.vec3.multiply([], direction, [distance, distance, distance])
-            );
+            var position = this.get('node').get('position');
+
+            glm.vec3.add(position, position, glm.vec3.multiply(
+                [], direction, [distance, distance, distance]));
         },
 
         moveForward: function (distance) {
-            this.move(this.forward, distance);
+            this.move(this.get('forward'), distance);
         },
 
         moveUp: function (distance) {
-            this.move(this.up, distance);
+            this.move(this.get('up'), distance);
         },
 
         moveRight: function (distance) {
-            this.move(this.right, distance);
+            this.move(this.get('right'), distance);
         },
     };
 

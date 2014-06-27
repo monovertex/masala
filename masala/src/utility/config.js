@@ -2,11 +2,13 @@
 define([
     'utility/color'
 ], function (Color) {
-    var config = {
+
+    return {
         CANVAS: {
             debug: false,
-            backgroundColor: new Color(0, 0, 0),
-            preloadAnimation: true
+            backgroundColor: new Color({ r: 0, b: 0, g: 0 }),
+            preloadAnimation: true,
+            fpsCounter: true
         },
 
         SCENE: {
@@ -16,6 +18,4 @@ define([
             }
         }
     };
-
-    return config;
 });

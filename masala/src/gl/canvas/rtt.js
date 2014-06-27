@@ -11,41 +11,52 @@ define([
 
     return {
         initializeRTT: function () {
-            if (_.isUndefined(this.rtt)) {
-                var context = this.context,
+            if (!this.get('rtt.initialized')) {
+                _.bindAll(this, 'resizeRTT');
+
+                var context = this.get('context'),
                     rtt = {
-                        fbo: new Framebuffer(context),
-                        program: new Program(context,
-                            constants.RTT.PROGRAM.shaders)
+                        fbo: new Framebuffer({ context: context }),
+                        program: new Program(
+                            { context: context },
+                            { sources: constants.RTT.PROGRAM.shaders }
+                        ),
+                        mesh: new Mesh(
+                            { context: context },
+                            { source: constants.RTT.MESH }
+                        ),
+                        initialized: true,
+                        enabled: true
                     };
 
-                this.rtt = rtt;
-
-                rtt.mesh = new Mesh(context, constants.RTT.MESH);
+                this.set('rtt', rtt);
+                this.listenTo(this, 'resize', this.resizeRTT);
+                this.resizeRTT();
+            } else {
+                this.set('rtt.enabled', true);
             }
-
-            this.rttEnabled = true;
-            this.resizeRTT();
         },
 
         resizeRTT: function () {
-            if (!_.isUndefined(this.rtt) && this.rttEnabled) {
-                var context = this.context,
-                    rtt = this.rtt,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+            var rtt = this.get('rtt');
+
+            if (rtt.initialized && rtt.enabled) {
+                var context = this.get('context'),
+                    canvas = this.get('canvas'),
+                    width = canvas.width,
+                    height = canvas.height;
 
                 if (!_.isUndefined(rtt.colorTexture)) {
                     delete rtt.colorTexture;
                 }
 
                 rtt.colorTexture = new Texture(
+                    { context: context },
                     _.extend({
                         source: null,
                         width: width,
                         height: height
-                    }, constants.RTT.TEXTURE),
-                    context
+                    }, constants.RTT.TEXTURE)
                 );
 
                 rtt.fbo.attachColorTexture(rtt.colorTexture);
@@ -56,14 +67,14 @@ define([
                     }
 
                     rtt.depthTexture = new Texture(
+                        { context: context },
                         _.extend({
                             source: null,
                             width: width,
                             height: height,
                             format: 'DEPTH_COMPONENT',
                             type: 'UNSIGNED_SHORT'
-                        }, constants.RTT.TEXTURE),
-                        context
+                        }, constants.RTT.TEXTURE)
                     );
 
                     rtt.fbo.attachDepthTexture(rtt.depthTexture);
@@ -74,7 +85,8 @@ define([
 
                     rtt.depthbuffer = context.createRenderbuffer();
 
-                    context.bindRenderbuffer(context.RENDERBUFFER, rtt.depthbuffer);
+                    context.bindRenderbuffer(context.RENDERBUFFER,
+                        rtt.depthbuffer);
                     context.renderbufferStorage(
                         context.RENDERBUFFER,
                         context.DEPTH_COMPONENT16,

@@ -1,59 +1,75 @@
 
 
 define([
-    'utility/class'
+    'scaffolding/class'
 ], function (Class) {
 
     return Class.extend({
 
-        initialize: function () {
-            var source;
-
-            if (arguments.length === 1) {
-                source = arguments[0];
-            } else {
-                source = arguments;
+        set: function (key, value) {
+            switch (key) {
+                case 'position':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec3.fromValues(value.x, value.y, value.z);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec3.fromValues(value[0], value[1],
+                            value[2]);
+                    }
+                    break;
+                case 'normal':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec3.fromValues(value.x, value.y, value.z);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec3.fromValues(value[0], value[1],
+                            value[2]);
+                    }
+                    glm.vec3.normalize(value, value);
+                    break;
+                case 'texCoords':
+                    if (_.isPlainObject(value)) {
+                        value = glm.vec2.fromValues(value.x, value.y);
+                    } else if (_.isArray(value)) {
+                        value = glm.vec2.fromValues(value[0], value[1]);
+                    }
+                    break;
             }
 
-            this.px = source[0] || 0;
-            this.py = source[1] || 0;
-            this.pz = source[2] || 0;
+            Class.prototype.set.call(this, key, value);
+        },
 
-            this.nx = source[3] || 0;
-            this.ny = source[4] || 0;
-            this.nz = source[5] || 0;
+        get: function (key) {
+            var value = Class.prototype.get.call(this, key);
 
-            this.tx = source[6] || 0;
-            this.ty = source[7] || 0;
-
-            this.px = parseFloat(this.px);
-            this.py = parseFloat(this.py);
-            this.pz = parseFloat(this.pz);
-
-            this.nx = parseFloat(this.nx);
-            this.ny = parseFloat(this.ny);
-            this.nz = parseFloat(this.nz);
-
-            this.tx = parseFloat(this.tx);
-            this.ty = parseFloat(this.ty);
-
-            if (this.nx !== 0 || this.ny !== 0 || this.nz !== 0) {
-                var normal = glm.vec3.create(),
-                    normalizedNormal = glm.vec3.create();
-                glm.vec3.set(normal, this.nx, this.ny, this.nz);
-                glm.vec3.normalize(normalizedNormal, normal);
-
-                this.nx = normalizedNormal[0];
-                this.ny = normalizedNormal[1];
-                this.nz = normalizedNormal[2];
+            switch (key) {
+                case 'position':
+                    if (_.isUndefined(value)) {
+                        return [0, 0, 0];
+                    }
+                    break;
+                case 'normal':
+                    if (_.isUndefined(value)) {
+                        return [0, 0, 0];
+                    }
+                    break;
+                case 'texCoords':
+                    if (_.isUndefined(value)) {
+                        return [0, 0];
+                    }
+                    break;
             }
+
+            return value;
         },
 
         flatten: function () {
+            var position = this.get('position'),
+                normal = this.get('normal'),
+                texCoords = this.get('texCoords');
+
             return [
-                this.px, this.py, this.pz,
-                this.nx, this.ny, this.nz,
-                this.tx, this.ty
+                position[0], position[1], position[2],
+                normal[0], normal[1], normal[2],
+                texCoords[0], texCoords[1]
             ];
         }
 

@@ -3,78 +3,38 @@ define([
     'interaction/actor/constants'
 ], function (constants) {
 
+    var defaults = constants.DEFAULTS.ROTATION;
+
     return {
 
-        initializeRotation: function (options) {
-            var defaults = constants.DEFAULTS.ROTATION;
-
-            // Rotation variables.
-            this.rotationToggle = {
-                x: constants.NO_MOVEMENT,
-                y: constants.NO_MOVEMENT,
-                z: constants.NO_MOVEMENT
-            };
-
-            this.rotationMouseControl = {
-                x: constants.ROTATIONS.NONE,
-                y: constants.ROTATIONS.NONE
-            };
-
-            this.rotationAngle = { x: 0, y: 0, z: 0 };
-
-            this.gimbals = (_.isBoolean(options.gimbals) ?
-                options.gimbals : true);
-
-            this.rotationSensitivity = {
-                x: defaults.SENSITIVITY,
-                y: defaults.SENSITIVITY,
-                z: defaults.SENSITIVITY
-            };
-
-            this.rotationSpeed = {
-                x: defaults.SPEED,
-                y: defaults.SPEED,
-                z: defaults.SPEED
-            };
-
-            if (!_.isUndefined(options.controls) &&
-                    !_.isUndefined(options.controls.mouse)) {
-                this.setDefaultValues(options.controls.mouse.sensitivity,
-                    this.rotationSensitivity);
-            }
-
-            this.setDefaultValues(options.rotationSpeed, this.rotationSpeed);
-
-            if (_.isUndefined(options.gimbals)) {
-                this.rotationWithGimbals = true;
-
-                if (_.isArray(options.gimbals) &&
-                        options.gimbals.length === 3) {
-                    this.rotationAxes = options.gimbals;
-                } else {
-                    this.rotationAxes = defaults.ORDER;
-                }
-            } else {
-                this.rotationWithGimbals = false;
-
-                if (_.isArray(options.rotationOrder) &&
-                        options.rotationOrder.length === 3) {
-                    this.rotationAxes = options.rotationOrder;
-                } else {
-                    this.rotationAxes = defaults.ORDER;
-                }
-            }
-
-            _.bindAll(this, 'cursorMove');
+        defaults: {
+            rotationToggle: constants.NO_MOVEMENT,
+            rotationMouseControl: constants.ROTATIONS.NONE,
+            rotationAngle: 0,
+            rotationGimbals: true,
+            rotationAxisOrder: defaults.ORDER,
+            rotationSensitivity: defaults.SENSITIVITY,
+            rotationSpeed: defaults.SPEED,
         },
 
-        cursorMove: function (cursor, eventName, data) {
-            var angles = {};
+        attributeTypes: {
+            'rotationToggle': 'xyz',
+            'rotationMouseControl': 'xy',
+            'rotationAngle': 'xyz',
+            'rotationSensitivity': 'xy',
+            'rotationSpeed': 'xyz'
+        },
 
-            angles[this.rotationMouseControl.x] = constants.MOUSE_FACTOR *
-                this.rotationSensitivity[this.rotationMouseControl.x] * data.x;
-            angles[this.rotationMouseControl.y] = constants.MOUSE_FACTOR *
-                this.rotationSensitivity[this.rotationMouseControl.y] * data.y;
+        cursorMove: function (ev) {
+            var angles = {},
+                data = ev.data,
+                rotationMouseControl = this.get('rotationMouseControl'),
+                rotationSensitivity = this.get('rotationSensitivity');
+
+            angles[rotationMouseControl.x] = constants.MOUSE_FACTOR *
+                rotationSensitivity.x * data.x;
+            angles[rotationMouseControl.y] = constants.MOUSE_FACTOR *
+                rotationSensitivity.y * data.y;
 
             this.rotate(angles, true);
         },
@@ -91,16 +51,18 @@ define([
                     return angleData || 0;
                 }
             } else {
-                return this.rotationSpeed[axis] * angleData *
-                    this.rotationToggle[axis];
+                return this.get('rotationSpeed')[axis] * angleData *
+                    this.get('rotationToggle')[axis];
             }
         },
 
         rotate: function (angleData, exact) {
-            if (this.rotationWithGimbals) {
-                this.rotateGimbals(this.rotationAxes, angleData, exact);
+            if (this.get('rotationGimbals')) {
+                this.rotateGimbals(this.get('rotationAxisOrder'), angleData,
+                    exact);
             } else {
-                this.rotateDirect(this.rotationAxes, angleData, exact);
+                this.rotateDirect(this.get('rotationAxisOrder'), angleData,
+                    exact);
             }
         },
 
@@ -122,7 +84,7 @@ define([
         rotateGimbals: function (axes, angleData, exact) {
 
             var axis = _.first(axes),
-                angle = this.rotationAngle[axis],
+                angle = this.get('rotationAngle')[axis],
                 angleIncrease = this.getAngleIncrease(axis, angleData, exact);
 
             if (axes.length > 1) {
@@ -137,7 +99,7 @@ define([
 
             if (angleIncrease !== 0) {
                 angle += angleIncrease;
-                this.rotationAngle[axis] = angle;
+                this.set('rotationAngle.' + axis, angle);
 
                 if (axes.length === 1) {
                     switch (axis) {
@@ -158,33 +120,39 @@ define([
         },
 
         rotateX: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.forward, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), forward,
+                    angle);
 
-            glm.vec3.normalize(this.up,
-                glm.vec3.transformQuat(this.up, this.up, rotation));
-            glm.vec3.normalize(this.right,
-                glm.vec3.transformQuat(this.right, this.right, rotation));
+            glm.vec3.normalize(up, glm.vec3.transformQuat(up, up, rotation));
+            glm.vec3.normalize(right, glm.vec3.transformQuat(right, right,
+                rotation));
         },
 
         rotateY: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.up, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), up, angle);
 
-            glm.vec3.normalize(this.forward,
-                glm.vec3.transformQuat(this.forward, this.forward, rotation));
-            glm.vec3.normalize(this.right,
-                glm.vec3.transformQuat(this.right, this.right, rotation));
+            glm.vec3.normalize(forward, glm.vec3.transformQuat(forward, forward,
+                rotation));
+            glm.vec3.normalize(right, glm.vec3.transformQuat(right, right,
+                rotation));
         },
 
         rotateZ: function (angle) {
-            var rotation = glm.quat.setAxisAngle(glm.quat.create(),
-                this.right, angle);
+            var up = this.get('up'),
+                right = this.get('right'),
+                forward = this.get('forward'),
+                rotation = glm.quat.setAxisAngle(glm.quat.create(), right,
+                    angle);
 
-            glm.vec3.normalize(this.up,
-                glm.vec3.transformQuat(this.up, this.up, rotation));
-            glm.vec3.normalize(this.forward,
-                glm.vec3.transformQuat(this.forward, this.forward, rotation));
+            glm.vec3.normalize(up, glm.vec3.transformQuat(up, up, rotation));
+            glm.vec3.normalize(forward, glm.vec3.transformQuat(forward, forward,
+                rotation));
         }
     };
 

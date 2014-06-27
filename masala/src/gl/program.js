@@ -1,15 +1,18 @@
 
 define([
-    'utility/class',
+    'scaffolding/class',
     'gl/program/constants'
 ], function (Class, programConstants) {
 
     return Class.extend({
 
-        initialize: function (context, sources) {
-            var program = context.createProgram();
+        initialize: function (attributes, options) {
+            var context = this.get('context'),
+                program = context.createProgram();
 
-            _.each(sources, function(source, type) {
+            _.bindAll(this, 'getUniformLoc', 'getAttribLoc', 'use');
+
+            _.each(options.sources, function(source, type) {
                 var shader;
 
                 if (type === programConstants.TYPE.FRAGMENT) {
@@ -39,44 +42,46 @@ define([
                     context.getProgramInfoLog(program));
             }
 
-            this.context = context;
-            this.program = program;
-            this.uniforms = {};
-            this.attributes = {};
-
-            _.bindAll(this, 'getUniformLoc', 'getAttribLoc', 'use');
+            this.set('program', program)
+                .set('uniforms', {})
+                .set('attributes', {});
         },
 
         getUniformLoc: function (uniform) {
-            var context = this.context;
+            var context = this.get('context'),
+                uniforms = this.get('uniforms'),
+                program = this.get('program');
 
-            if (_.isUndefined(this.uniforms[uniform])) {
-                this.uniforms[uniform] = context.getUniformLocation(
-                    this.program, uniform);
+            if (_.isUndefined(uniforms[uniform])) {
+                uniforms[uniform] = context.getUniformLocation(program,
+                    uniform);
             }
 
-            return this.uniforms[uniform];
+            return uniforms[uniform];
         },
 
         getAttribLoc: function (attribute) {
-            var context = this.context;
+            var context = this.get('context'),
+                attributes = this.get('attributes'),
+                program = this.get('program');
 
-            if (_.isUndefined(this.attributes[attribute])) {
-                this.attributes[attribute] = context.getAttribLocation(
-                    this.program, attribute);
+            if (_.isUndefined(attributes[attribute])) {
+                attributes[attribute] = context.getAttribLocation(program,
+                    attribute);
 
-                if (this.attributes[attribute] > 0 ||
-                        this.attributes[attribute] === 0) {
-                    context.enableVertexAttribArray(this.attributes[attribute]);
+                if (attributes[attribute] > 0 || attributes[attribute] === 0) {
+                    context.enableVertexAttribArray(attributes[attribute]);
                 }
             }
 
-            return this.attributes[attribute];
+            return attributes[attribute];
         },
 
-        use: function (attribute) {
-            this.context.useProgram(this.program);
-            this.context._currentProgram = this;
+        use: function () {
+            var context = this.get('context');
+
+            context.useProgram(this.get('program'));
+            context._currentProgram = this;
         }
 
     });

@@ -81,50 +81,46 @@ define([
 
             _.each(face, function (faceItem) {
                 var faceItemData = faceItem.split('/'),
-                    vertexRaw = raw.vertices[parseInt(
+                    position = raw.vertices[parseInt(
                         faceItemData[0], 10) - 1],
-                    normalRaw,
-                    texcoordRaw;
+                    normal,
+                    texCoords;
 
                 if (faceFormat === OBJ.FACE_FORMAT.VTN ||
                         faceFormat === OBJ.FACE_FORMAT.VN) {
-                    normalRaw = raw.normals[parseInt(
-                        faceItemData[2], 10) - 1];
+                    normal = raw.normals[parseInt(faceItemData[2], 10) - 1];
                 }
-
-
 
                 if (faceFormat === OBJ.FACE_FORMAT.VT ||
                         faceFormat === OBJ.FACE_FORMAT.VTN) {
-                    texcoordRaw = raw.texcoords[parseInt(
+                    texCoords = raw.texcoords[parseInt(
                         faceItemData[1], 10) - 1];
                 }
 
                 switch (faceFormat) {
                     case OBJ.FACE_FORMAT.V:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2]
-                        );
+                        vertex = new Vertex({
+                            position: position
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VN:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            normalRaw[0], normalRaw[1], normalRaw[2]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            normal: normal
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VTN:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            normalRaw[0], normalRaw[1], normalRaw[2],
-                            texcoordRaw[0], texcoordRaw[1]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            normal: normal,
+                            texCoords: texCoords
+                        });
                         break;
                     case OBJ.FACE_FORMAT.VT:
-                        vertex = new Vertex(
-                            vertexRaw[0], vertexRaw[1], vertexRaw[2],
-                            undefined, undefined, undefined,
-                            texcoordRaw[0], texcoordRaw[1]
-                        );
+                        vertex = new Vertex({
+                            position: position,
+                            texCoords: texCoords
+                        });
                         break;
                 }
 
@@ -141,8 +137,8 @@ define([
                 return parseObj(source);
             } else {
                 return {
-                    vertices: _.map(source.vertices, function (vertex) {
-                        return new Vertex(vertex);
+                    vertices: _.map(source.vertices, function (attributes) {
+                        return new Vertex(attributes);
                     }),
                     indices: _.flatten(source.indices, true)
                 };

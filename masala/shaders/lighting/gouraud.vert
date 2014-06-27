@@ -32,7 +32,7 @@ varying vec3 vColor;
 
 // Compute attenuation based on distance and light size.
 // More information:
-//      http://imdoingitwrong.wordpress.com/2011/01/31/light-attenuation/
+// http://imdoingitwrong.wordpress.com/2011/01/31/light-attenuation/
 float computeAttenuation(float distance, float radius) {
     // Compute distance from the light's surface instead of center.
     float d = max(distance - radius, 0.0);

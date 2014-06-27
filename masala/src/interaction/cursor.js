@@ -1,7 +1,7 @@
 
 define([
-    'utility/namespace',
-    'utility/class',
+    'scaffolding/namespace',
+    'scaffolding/class',
     'interaction/cursor/lock'
 ], function (namespace, Class, lock) {
 

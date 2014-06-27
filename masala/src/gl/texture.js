@@ -1,13 +1,14 @@
 
 
 define([
-    'utility/class'
+    'scaffolding/class'
 ], function (Class) {
 
     return Class.extend({
 
-        initialize: function (options, context) {
-            var texture = context.createTexture(),
+        initialize: function (attributes, options) {
+            var context = this.get('context'),
+                texture = context.createTexture(),
                 wrapS = 'REPEAT',
                 wrapT = 'REPEAT',
                 filterMag = 'NEAREST',
@@ -86,8 +87,8 @@ define([
                     options.source
                 );
 
-                this.width = options.width;
-                this.height = options.height;
+                this.set('width', options.width);
+                this.set('height', options.height);
 
             } else if (options.source instanceof Image) {
                 context.texImage2D(
@@ -104,22 +105,25 @@ define([
                 context.generateMipmap(context.TEXTURE_2D);
             }
 
-            this.texture = texture;
-            this.context = context;
+            this.set('texture', texture);
 
             this.unbind();
         },
 
         bind: function () {
-            this.context.bindTexture(this.context.TEXTURE_2D, this.texture);
+            var context = this.get('context');
+
+            context.bindTexture(context.TEXTURE_2D, this.get('texture'));
         },
 
         unbind: function () {
-            this.context.bindTexture(this.context.TEXTURE_2D, null);
+            var context = this.get('context');
+
+            context.bindTexture(context.TEXTURE_2D, null);
         },
 
         render: function (unit, uniformName) {
-            var context = this.context,
+            var context = this.get('context'),
                 program = context._currentProgram;
 
             context.activeTexture(context.TEXTURE0 + unit);

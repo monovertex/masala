@@ -9,33 +9,35 @@ define([
     return {
 
         initializeExtensions: function () {
-            var extensions = constants.EXTENSIONS,
-                context = this.context;
+            var requiredExtensions = constants.EXTENSIONS,
+                context = this.get('context'),
+                availableExtensions = {},
+                extensions = {};
 
-            this.availableExtensions = {};
-            this.extensions = {};
-
-            _.each(extensions, function (extensionName) {
+            _.each(requiredExtensions, function (extensionName) {
                 _.each(prefixes, function (prefix) {
                     var name = prefix + extensionName,
                         extension = context.getExtension(name);
 
                     if (!_.isNull(extension)) {
-                        this.availableExtensions[extensionName] = true;
-                        this.extensions[extensionName] = extension;
+                        availableExtensions[extensionName] = true;
+                        extensions[extensionName] = extension;
                         return false;
                     }
                 }, this);
             }, this);
+
+            this.set('availableExtensions', availableExtensions);
+            this.set('extensions', extensions);
         },
 
         extensionAvailable: function (name) {
-            return this.availableExtensions[name];
+            return this.get('availableExtensions.' + name);
         },
 
         getExtension: function (name) {
             if (this.extensionAvailable(name)) {
-                return this.extensions[name];
+                return this.get('extensions.' + name);
             }
         }
 

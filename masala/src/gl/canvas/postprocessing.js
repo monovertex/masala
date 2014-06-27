@@ -8,49 +8,58 @@ define([
 
     return {
         initializePostprocessing: function () {
-            if (_.isUndefined(this.postprocessing)) {
-                var context = this.context,
+            if (!this.get('postprocessing.initialized')) {
+                _.bindAll(this, 'resizePostprocessing');
+
+                var context = this.get('context'),
                     postprocessing = {
                         primary: {
-                            fbo: new Framebuffer(context)
+                            fbo: new Framebuffer({ context: context })
                         },
                         secondary: {
-                            fbo: new Framebuffer(context)
-                        }
+                            fbo: new Framebuffer({ context: context })
+                        },
+                        initialized: true,
+                        enabled: true
                     };
 
-                this.postprocessing = postprocessing;
+                this.set('postprocessing', postprocessing);
+                this.listenTo(this, 'resize', this.resizePostprocessing);
+                this.resizePostprocessing();
+            } else {
+                this.set('postprocessing.enabled', true);
             }
-
-            this.postprocessingEnabled = true;
-            this.resizePostprocessing();
         },
 
         resizePostprocessing: function() {
-            if (!_.isUndefined(this.postprocessing) &&
-                    this.postprocessingEnabled) {
-                var context = this.context,
-                    postprocessing = this.postprocessing,
-                    width = this.canvas.width,
-                    height = this.canvas.height;
+            var postprocessing = this.get('postprocessing');
 
-                _.each(postprocessing, function (obj) {
-                    if (!_.isUndefined(obj.colorTexture)) {
-                        delete obj.colorTexture;
-                    }
-
-                    obj.colorTexture = new Texture(
-                        _.extend({
-                            source: null,
-                            width: width,
-                            height: height
-                        }, constants.RTT.TEXTURE),
-                        context
-                    );
-
-                    obj.fbo.attachColorTexture(obj.colorTexture);
-                }, this);
+            if (postprocessing.initialized && postprocessing.enabled) {
+                this.resizePostprocessingComponent(postprocessing.primary);
+                this.resizePostprocessingComponent(postprocessing.secondary);
             }
+        },
+
+        resizePostprocessingComponent: function (component) {
+            var context = this.get('context'),
+                canvas = this.get('canvas'),
+                width = canvas.width,
+                height = canvas.height;
+
+            if (!_.isUndefined(component.colorTexture)) {
+                delete component.colorTexture;
+            }
+
+            component.colorTexture = new Texture(
+                { context: context },
+                _.extend({
+                    source: null,
+                    width: width,
+                    height: height
+                }, constants.RTT.TEXTURE)
+            );
+
+            component.fbo.attachColorTexture(component.colorTexture);
         }
     };
 

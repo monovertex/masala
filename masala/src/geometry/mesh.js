@@ -3,21 +3,20 @@
 define([
     'geometry/constants',
     'gl/program/constants',
-    'utility/class',
+    'scaffolding/class',
     'geometry/mesh/parse'
 ], function (geometryConstants, programConstants, Class, parse) {
 
     return Class.extend(_.extend({
 
-        initialize: function (context, source) {
-            this.context = context;
+        initialize: function (attributes, options) {
+            _.bindAll(this, 'linkAttributes');
 
-            var rawData = this.parse(source),
+            var context = this.get('context'),
+                rawData = this.parse(options.source),
                 vbo = context.createBuffer(),
                 ibo = context.createBuffer(),
                 coordsList, flat, i, maxCoord = 0;
-
-            _.bindAll(this, 'linkAttributes');
 
             coordsList = _.flatten(_.reduce(
                 rawData.vertices,
@@ -54,26 +53,26 @@ define([
                 context.STATIC_DRAW
             );
 
-            this.vbo = vbo;
-            this.ibo = ibo;
-            this.indexCount = rawData.indices.length;
+            this.set('vbo', vbo);
+            this.set('ibo', ibo);
+            this.set('indexCount', rawData.indices.length);
         },
 
         render: function () {
-            var context = this.context;
+            var context = this.get('context');
 
-            context.bindBuffer(context.ARRAY_BUFFER, this.vbo);
+            context.bindBuffer(context.ARRAY_BUFFER, this.get('vbo'));
 
             this.linkAttributes();
 
-            context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.ibo);
+            context.bindBuffer(context.ELEMENT_ARRAY_BUFFER, this.get('ibo'));
 
-            context.drawElements(context.TRIANGLES, this.indexCount,
+            context.drawElements(context.TRIANGLES, this.get('indexCount'),
                 context.UNSIGNED_SHORT, 0);
         },
 
         linkAttributes: function () {
-            var context = this.context,
+            var context = this.get('context'),
                 VERTEX = geometryConstants.VERTEX;
 
             context.vertexAttribPointer(

@@ -1,7 +1,5 @@
 
-define([
-    'geometry/vertex'
-], function (Vertex) {
+define([], function () {
 
     return  {
         EXTENSIONS: [
@@ -12,7 +10,7 @@ define([
             STYLE: {
                 WRAPPER: {
                     position: 'absolute',
-                    zIndex: '1000',
+                    zIndex: '2000',
                     backgroundColor: '#222'
                 },
                 INNER: {
@@ -31,6 +29,49 @@ define([
             ROTATION_PROPERTIES: ['webkitTransform', 'mozTransform',
                 'msTransform', 'oTransform', 'transform'],
         },
+        FPS_COUNTER: {
+            STYLE: {
+                WRAPPER: {
+                    position: 'absolute',
+                    zIndex: '1000',
+                    backgroundColor: 'rgba(210, 30, 30, 0.4)',
+                    width: '60px',
+                    height: '70px'
+                },
+                INFO: {
+                    float: 'left',
+                    margin: '1px',
+                    width: '28px',
+                    height: '18px',
+                    lineHeight: '18px',
+                    fontSize: '14px',
+                    color: '#eadada',
+                    fontFamily: '"System"',
+                    overflow: 'hidden',
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                },
+                INFO_HEADER: {
+                    fontSize: '10px',
+                    fontFamily: '"Arial"'
+                },
+                GRAPH: {
+                    margin: '1px',
+                    width: '58px',
+                    height: '28px'
+                }
+            },
+            GRAPH: {
+                MAX_FPS: 70,
+                LINE_WIDTH: 2,
+                HIGHLIGHT_WIDTH: 1,
+                COLOR: '#1d0101',
+                HIGHLIGHT: '#dba3a3'
+            },
+            POSITION_OFFSET: 5,
+            FRAME_COUNT: 29,
+            FRAME_GROUP_COUNT: 60
+        },
         RTT: {
             TEXTURE: {
                 filter: 'LINEAR',
@@ -38,10 +79,26 @@ define([
             },
             MESH: {
                 vertices: [
-                    [-1, -1, 0, 0, 0, 1, 0, 0],
-                    [-1, 1, 0, 0, 0, 1, 0, 1],
-                    [1, 1, 0, 0, 0, 1, 1, 1],
-                    [1, -1, 0, 0, 0, 1, 1, 0]
+                    {
+                        position: [-1, -1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [0, 0]
+                    },
+                    {
+                        position: [-1, 1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [0, 1]
+                    },
+                    {
+                        position: [1, 1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [1, 1]
+                    },
+                    {
+                        position: [1, -1, 0],
+                        normal: [0, 0, 1],
+                        texCoords: [1, 0]
+                    }
                 ],
                 indices: [[0, 1, 2], [0, 2, 3]]
             },

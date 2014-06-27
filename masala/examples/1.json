@@ -7,7 +7,6 @@
     "defaultProgram": "lighting",
     "postprocessing": [
         "SHADER.POSTPROCESSING.BLUR.MOTION",
-        "SHADER.POSTPROCESSING.BLOOM",
         "SHADER.POSTPROCESSING.ANTIALIASING"
     ],
     "meshes": {
@@ -84,7 +83,16 @@
                 {
                     "mesh": "/masala/meshes/dragon.obj",
                     "material": "red",
-                    "position": { "y": 3, "z": 3 }
+                    "position": { "y": 3, "z": 3 },
+
+                    "children": [
+                        {
+                            "position": { "y": 2 },
+                            "billboard": "primaryCamera",
+                            "scale": { "x": 1.1, "y": 1.1, "z": 1.1},
+                            "texture": "rock"
+                        }
+                    ]
                 },
                 {
                     "mesh": "sphere",
@@ -97,6 +105,7 @@
                 },
                 {
                     "scale": { "x": 0.4, "y": 0.4, "z": 0.6 },
+                    "rotation": { "x": 45 },
                     "mesh": "/masala/meshes/cube.obj",
                     "material": "red",
                     "position": { "x": -2, "y": 2, "z": -4 },
@@ -131,6 +140,7 @@
             }
         },
         {
+            "name": "primaryCamera",
             "mesh": "sphere",
             "material": "red",
             "scale": { "x": 0.5, "y": 0.5, "z": 0.5 },
@@ -150,10 +160,10 @@
                     }
                 },
                 "speed": {
-                    "max": { "x": 10, "y": 3 }
+                    "max": { "x": 10, "z": 3 }
                 },
-                "acceleration": { "x": 5, "y": 5 },
-                "deceleration": { "x": 5, "y": 5 }
+                "acceleration": { "x": 5 },
+                "deceleration": { "x": 5 }
             },
             "children": [{
                 "mesh": "sphere",

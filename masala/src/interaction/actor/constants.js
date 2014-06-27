@@ -12,7 +12,8 @@ define([], function () {
         ROTATIONS: {
             'yaw': 'y',
             'pitch': 'z',
-            'roll': 'x'
+            'roll': 'x',
+            NONE: 0
         },
         MOUSE_FACTOR: -0.0005,
         DEFAULTS: {
